@@ -9,7 +9,7 @@ COPY build_files /build_files
 # FROM ghcr.io/ublue-os/bazzite:stable
 FROM ${BASE_IMAGE}
 
-ARG IMAGE_NAME="${IMAGE_NAME:-tronic-os}"
+ARG IMAGE_NAME="${IMAGE_NAME:-serpentine}"
 ARG IMAGE_VENDOR="${IMAGE_VENDOR:-bogdan-d}"
 
 ## Other possible base images include:

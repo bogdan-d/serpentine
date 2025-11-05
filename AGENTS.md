@@ -1,8 +1,8 @@
-# Tronic-OS Development Guidelines
+# Serpentine Development Guidelines
 
 ## Architecture Overview
 
-Tronic-OS is a developer-focused immutable OS variant built on Bazzite (gaming-focused Fedora). Uses multi-stage container builds (`Containerfile`) with modular scripts (`build_files/`) and system file overlays (`system_files/`) for configuration. Service boundaries: DNF5 for system packages, Flatpak for user apps, Homebrew for fonts, cli and everything else. Data flows from base image through numbered build scripts (00-* to 999-*) to final OSTree image.
+Serpentine is a developer-focused immutable OS variant built on Bazzite (gaming-focused Fedora). Uses multi-stage container builds (`Containerfile`) with modular scripts (`build_files/`) and system file overlays (`system_files/`) for configuration. Service boundaries: DNF5 for system packages, Flatpak for user apps, Homebrew for fonts, cli and everything else. Data flows from base image through numbered build scripts (00-* to 999-*) to final OSTree image.
 
 ### Base Technology Stack
 - **Base OS**: Bazzite (Fedora Atomic - Kinoite)
@@ -69,7 +69,7 @@ mesa, vulkan-drivers          # Graphics stack
 
 ## Development Workflows
 
-Local testing: `podman build -t test .` then `podman run --rm -it test /bin/bash`. Full builds require CI with akmods. Installation: `rpm-ostree rebase ostree-image-signed:docker://ghcr.io/bogdan-d/tronic-os:stable`. Debugging: `journalctl -u service-name`, `systemctl --global status service-name` for user services. Validation: `just just-check` for syntax.
+Local testing: `podman build -t test .` then `podman run --rm -it test /bin/bash`. Full builds require CI with akmods. Installation: `rpm-ostree rebase ostree-image-signed:docker://ghcr.io/bogdan-d/serpentine:stable`. Debugging: `journalctl -u service-name`, `systemctl --global status service-name` for user services. Validation: `just just-check` for syntax.
 
 ### Building Images
 ```bash
@@ -94,7 +94,7 @@ just build-iso bazzite-deck kinoite && just run-iso bazzite-deck kinoite
 
 ## Key Conventions
 
-Numeric script prefixes ensure execution order (e.g., `20-` before `40-`). Just commands imported via `import "/usr/share/ublue-os/just/95-tronic-os.just"`. Setup hooks use version control (`version-script name scope version`). Variant-specific configs (KDE/NVIDIA) in build scripts. External repos: COPR for ublue packages, Microsoft for VS Code, Docker Inc. for Docker CE.
+Numeric script prefixes ensure execution order (e.g., `20-` before `40-`). Just commands imported via `import "/usr/share/ublue-os/just/95-serpentine.just"`. Setup hooks use version control (`version-script name scope version`). Variant-specific configs (KDE/NVIDIA) in build scripts. External repos: COPR for ublue packages, Microsoft for VS Code, Docker Inc. for Docker CE.
 
 ### Configuration Patterns
 1. **Shared configs** in `system_files/*/shared/`

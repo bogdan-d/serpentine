@@ -1,12 +1,12 @@
-# Tronic-OS
+# Serpentine
 
-[![Build Status](https://github.com/bogdan-d/tronic-os/actions/workflows/build.yml/badge.svg)](https://github.com/bogdan-d/tronic-os/actions/)
+[![Build Status](https://github.com/bogdan-d/serpentine/actions/workflows/build.yml/badge.svg)](https://github.com/bogdan-d/serpentine/actions/)
 
 ---
 
 ## Introduction
 
-Welcome to Tronic-OS! This project is a developer-focused immutable OS variant built on [Bazzite](https://bazzite.gg/) (a gaming-focused Fedora Atomic desktop), using modern container-based image building techniques.
+Welcome to Serpentine! This project is a developer-focused immutable OS variant built on [Bazzite](https://bazzite.gg/) (a gaming-focused Fedora Atomic desktop), using modern container-based image building techniques.
 
 While this is a personal daily driver OS, tailored for development workflows with gaming capabilities, it's also publicly available as a learning resource or a starting point for your own custom OS image. You can see how certain customizations are made, fork the project to suit your needs, or draw inspiration for your own builds.
 
@@ -26,7 +26,7 @@ While this is a personal daily driver OS, tailored for development workflows wit
 
 ## Features & Customizations
 
-Here's a summary of what makes Tronic-OS unique:
+Here's a summary of what makes Serpentine unique:
 
 ### System-Level Changes
 
@@ -87,7 +87,7 @@ You can switch an existing `bootc`-compatible system (like Fedora, Bazzite, or B
 
 **Rebase Command:**
 ```bash
-sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/bogdan-d/tronic-os:stable
+sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/bogdan-d/serpentine:stable
 ```
 
 After the command completes, reboot your system. You can check the status at any time with `rpm-ostree status` or `sudo bootc status`.
@@ -111,8 +111,8 @@ If you want to customize this image or build it yourself, you can use the provid
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/bogdan-d/tronic-os.git
-    cd tronic-os
+    git clone https://github.com/bogdan-d/serpentine.git
+    cd serpentine
     ```
 
 2.  **Build the container image:**
@@ -152,7 +152,7 @@ The build process uses a multi-stage Containerfile with modular scripts:
 These images are signed with [Sigstore](https://www.sigstore.dev/)'s [cosign](https://github.com/sigstore/cosign). You can verify the signature by downloading the `cosign.pub` file from this repo and running the following command:
 
 ```bash
-cosign verify --key cosign.pub ghcr.io/bogdan-d/tronic-os
+cosign verify --key cosign.pub ghcr.io/bogdan-d/serpentine
 ```
 
 ---
@@ -160,7 +160,7 @@ cosign verify --key cosign.pub ghcr.io/bogdan-d/tronic-os
 ## Project Structure
 
 ```
-tronic-os/
+serpentine/
 ├── Containerfile              # Main build definition
 ├── Justfile                   # Build automation commands
 ├── build_files/               # Build scripts (executed in order)

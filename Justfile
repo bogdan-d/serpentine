@@ -1,5 +1,5 @@
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "bogdan-d")
-export image_name := env("IMAGE_NAME", "tronic-os")
+export image_name := env("IMAGE_NAME", "serpentine")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 export source_org := env("SOURCE_ORG", "ublue-os")
@@ -85,9 +85,9 @@ sudoif command *args:
 # just build $target_image $tag $base_image
 #
 # Example usage:
-#   just build tronic-os latest bazzite-deck-nvidia
+#   just build serpentine latest bazzite-deck-nvidia
 #
-# This will build an image 'tronic-os:latest' based on bazzite-deck-nvidia.
+# This will build an image 'serpentine:latest' based on bazzite-deck-nvidia.
 #
 
 # Build the image using the specified parameters

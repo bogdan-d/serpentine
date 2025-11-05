@@ -1,5 +1,5 @@
 ---
-name: Build TronicOS
+name: Build Serpentine
 on:
   pull_request:
     branches:
@@ -27,7 +27,7 @@ on:
 
 env:
   IMAGE_DESC: "${{ github.event.repository.description }}"
-  IMAGE_KEYWORDS: "bootc,ublue,universal-blue,bazzite,tronic-os"
+  IMAGE_KEYWORDS: "bootc,ublue,universal-blue,bazzite,serpentine"
   IMAGE_LOGO_URL: "https://avatars.githubusercontent.com/u/4302588?s=200&v=4"  # Put your own image here for a fancy profile on https://artifacthub.io/!
   IMAGE_NAME: "${{ github.event.repository.name }}"  # output image name, usually same as repo name
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
@@ -177,7 +177,7 @@ jobs:
       - name: Generate output image ref
         id: gen_image_ref
         run: |
-          echo "IMAGE_NAME=${BASE_IMAGE/bazzite/tronic-os}" | sed 's/-deck//' | tee -a "$GITHUB_ENV"
+          echo "IMAGE_NAME=${BASE_IMAGE/bazzite/serpentine}" | sed 's/-deck//' | tee -a "$GITHUB_ENV"
       ## END:FROM BAZZITE-DX
 
       # Image metadata for https://artifacthub.io/ - This is optional but is highly recommended so we all can get a index of all the custom images
