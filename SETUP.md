@@ -160,9 +160,9 @@ Once the workflow is done, you'll find the disk images either in your S3 bucket 
 
 This template comes with the necessary tooling to index your image on [artifacthub.io](https://artifacthub.io). Use the `artifacthub-repo.yml` file at the root to verify yourself as the publisher. This is important to you for a few reasons:
 
-- The value of artifacthub is it's one place for people to index their custom images, and since we depend on each other to learn, it helps grow the community. 
+- The value of artifacthub is it's one place for people to index their custom images, and since we depend on each other to learn, it helps grow the community.
 - You get to see your pet project listed with the other cool projects in Cloud Native.
-- Since the site puts your README front and center, it's a good way to learn how to write a good README, learn some marketing, finding your audience, etc. 
+- Since the site puts your README front and center, it's a good way to learn how to write a good README, learn some marketing, finding your audience, etc.
 
 [Discussion Thread](https://universal-blue.discourse.group/t/listing-your-custom-image-on-artifacthub/6446)
 
@@ -248,6 +248,10 @@ Runs shell check on all Bash scripts.
 ### `just format`
 
 Runs shfmt on all Bash scripts.
+
+## Additional resources
+
+For additional driver support, ublue maintains a set of scripts and container images available at [ublue-akmod](https://github.com/ublue-os/akmods). These images include the necessary scripts to install multiple kernel drivers within the container (Nvidia, OpenRazer, Framework...). The documentation provides guidance on how to properly integrate these drivers into your container image.
 
 ## Community Examples
 
