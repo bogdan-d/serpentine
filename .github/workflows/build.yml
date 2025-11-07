@@ -372,5 +372,7 @@ jobs:
     name: Generate Release
     needs: [build_push]
     if: github.event_name != 'pull_request'
+    permissions:
+      contents: write
     secrets: inherit
     uses: ./.github/workflows/generate_release.yml
