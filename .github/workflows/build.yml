@@ -51,6 +51,8 @@ jobs:
       fail-fast: false
       matrix:
         base_image:
+          # - bazzite
+          # - bazzite-nvidia
           - bazzite-deck
           # - bazzite-deck-gnome
           # - bazzite-deck-nvidia-gnome
@@ -365,3 +367,10 @@ jobs:
               exit 1
             fi
           done
+
+  generate_release:
+    name: Generate Release
+    needs: [build_push]
+    if: github.event_name != 'pull_request'
+    secrets: inherit
+    uses: ./.github/workflows/generate_release.yml

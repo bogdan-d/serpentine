@@ -3,3 +3,8 @@ _build_*
 output
 _build-*/**
 .vscode/settings.json
+
+# Ignore python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class

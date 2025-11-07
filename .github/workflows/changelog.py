@@ -15,6 +15,10 @@ IMAGES = [
     f"{BASE_IMAGE_NAME}-nvidia",
 ]
 
+# Upstream (base) image used to build Serpentine
+UPSTREAM_IMAGE = "ublue-os/bazzite-deck"
+UPSTREAM_REGISTRY = "docker://ghcr.io/"
+
 RETRIES = 3
 RETRY_WAIT = 5
 FEDORA_PATTERN = re.compile(r"\.fc\d\d")
@@ -34,6 +38,27 @@ OTHER_NAMES = {
     "gnome": "### Gnome Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
     "nvidia": "### Nvidia Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
 }
+
+# Template for upstream base image changes section with major packages
+# Note: Double braces {{pkgrel:...}} are escaped for .format() call, then replaced with single braces
+UPSTREAM_PAT = f"""### Upstream Base Image ({UPSTREAM_IMAGE})
+
+#### Major packages (from upstream: {UPSTREAM_IMAGE})
+| Name | Version |
+| --- | --- |
+| **Kernel** | {{{{pkgrel:kernel}}}} |
+| **Firmware** | {{{{pkgrel:atheros-firmware}}}} |
+| **Mesa** | {{{{pkgrel:mesa-filesystem}}}} |
+| **Gamescope** | {{{{pkgrel:gamescope}}}} |
+| **Gnome** | {{{{pkgrel:gnome-control-center-filesystem}}}} |
+| **KDE** | {{{{pkgrel:plasma-desktop}}}} |
+| **[HHD](https://github.com/hhd-dev/hhd)** | {{{{pkgrel:hhd}}}} |
+
+#### Package changes (from upstream: {UPSTREAM_IMAGE})
+| | Name | Previous | New |
+| --- | --- | --- | --- |{{changes}}
+
+"""
 
 COMMITS_FORMAT = (
     "### Commits\n| Hash | Subject | Author |\n| --- | --- | --- |{commits}\n\n"
@@ -63,9 +88,9 @@ From previous `{target}` version `{prev}` there have been the following changes.
 For current users, type the following to rebase to this version:
 ```bash
 # For this branch (if latest):
-bazzite-rollback-helper rebase {target}
+serpentine-rollback-helper rebase {target}
 # For this specific image:
-bazzite-rollback-helper rebase {curr}
+serpentine-rollback-helper rebase {curr}
 ```
 """
 HANDWRITTEN_PLACEHOLDER = """\
@@ -100,25 +125,31 @@ def get_manifests(target: str):
     out = {}
     imgs = list(get_images())
     for j, (img, _, _) in enumerate(imgs):
-        output = None
         print(f"Getting {img}:{target} manifest ({j+1}/{len(imgs)}).")
-        for i in range(RETRIES):
-            try:
-                output = subprocess.run(
-                    ["skopeo", "inspect", REGISTRY + img + ":" + target],
-                    check=True,
-                    stdout=subprocess.PIPE,
-                ).stdout
-                break
-            except subprocess.CalledProcessError:
-                print(
-                    f"Failed to get {img}:{target}, retrying in {RETRY_WAIT} seconds ({i+1}/{RETRIES})"
-                )
-                time.sleep(RETRY_WAIT)
-        if output is None:
+        ref = REGISTRY + img + ":" + target
+        manifest = inspect_image(ref)
+        if manifest is None:
             print(f"Failed to get {img}:{target}, skipping")
             continue
-        out[img] = json.loads(output)
+        out[img] = manifest
+    return out
+
+
+def get_upstream_manifests(target: str):
+    """
+    Fetches upstream (base) image manifests for a specific target/tag.
+
+    Returns a mapping with a single entry for the upstream image so that we can
+    reuse existing helpers that expect a dict structure.
+    """
+    out = {}
+    ref = UPSTREAM_REGISTRY + UPSTREAM_IMAGE + ":" + target
+    print(f"Getting upstream {UPSTREAM_IMAGE}:{target} manifest.")
+    manifest = inspect_image(ref)
+    if manifest:
+        out[UPSTREAM_IMAGE] = manifest
+    else:
+        print(f"Failed to get upstream {UPSTREAM_IMAGE}:{target}, skipping upstream section")
     return out
 
 
@@ -159,6 +190,92 @@ def get_packages(manifests: dict[str, Any]):
         except Exception as e:
             print(f"Failed to get packages for {img}:\n{e}")
     return packages
+
+
+def inspect_image(ref: str):
+    output = None
+    for i in range(RETRIES):
+        try:
+            output = subprocess.run(
+                ["skopeo", "inspect", ref],
+                check=True,
+                stdout=subprocess.PIPE,
+            ).stdout
+            break
+        except subprocess.CalledProcessError:
+            if i < RETRIES - 1:
+                print(
+                    f"Failed to inspect {ref}, retrying in {RETRY_WAIT} seconds ({i+1}/{RETRIES})"
+                )
+                time.sleep(RETRY_WAIT)
+    if output is None:
+        return None
+    try:
+        return json.loads(output)
+    except Exception:
+        return None
+
+
+def get_upstream_section(
+    target: str,
+    upstream_curr_manifests: dict[str, Any] | None = None,
+    upstream_prev_manifests: dict[str, Any] | None = None,
+):
+    """
+    Builds the upstream changes section for the changelog.
+
+    Compares the upstream base image packages between its previous and current tag
+    to show what changed in the base layer that Serpentine is built on top of.
+    """
+    try:
+        # Fetch current upstream manifests if not provided
+        upstream_curr = upstream_curr_manifests or get_upstream_manifests(target)
+        if not upstream_curr:
+            return ""
+
+        # Derive previous and current tags from upstream manifest
+        try:
+            prev_tag, curr_tag = get_tags(target, upstream_curr)
+            print(f"Upstream previous tag: {prev_tag}")
+            print(f"Upstream  current tag: {curr_tag}")
+        except Exception as e:
+            print(f"Failed to determine upstream tags: {e}")
+            return ""
+
+        # Fetch previous upstream manifests if not provided
+        upstream_prev = upstream_prev_manifests or get_upstream_manifests(prev_tag)
+
+        # Extract package versions from both manifests
+        prev_versions = get_versions(upstream_prev)
+        curr_versions = get_versions(upstream_curr)
+
+        # Combine all package names from both versions
+        pkgs = sorted(set(prev_versions.keys()) | set(curr_versions.keys()))
+
+        # Calculate and format package changes
+        chg = calculate_changes(pkgs, prev_versions, curr_versions)
+        if not chg:
+            return ""
+
+        # Build upstream section with major packages
+        upstream_section = UPSTREAM_PAT.format(changes=chg)
+
+        # Replace major package version placeholders
+        for pkg, v in curr_versions.items():
+            if pkg not in prev_versions or prev_versions[pkg] == v:
+                upstream_section = upstream_section.replace(
+                    "{pkgrel:" + pkg + "}", PATTERN_PKGREL.format(version=v)
+                )
+            else:
+                upstream_section = upstream_section.replace(
+                    "{pkgrel:" + pkg + "}",
+                    PATTERN_PKGREL_CHANGED.format(prev=prev_versions[pkg], new=v),
+                )
+
+        return upstream_section
+    except Exception as e:
+        print(f"Failed to build upstream section:\n{e}")
+        return ""
 
 
 def get_package_groups(prev: dict[str, Any], manifests: dict[str, Any]):
@@ -266,7 +383,15 @@ def calculate_changes(pkgs: list[str], prev: dict[str, str], curr: dict[str, str
     return out
 
 
-def get_commits(prev_manifests, manifests, workdir: str):
+def get_commits(prev_manifests, manifests, workdir: str | None):
+    """
+    Extracts git commit history between two versions.
+
+    Returns empty string if workdir is None or if git operations fail.
+    """
+    if not workdir:
+        return ""
+
     try:
         start = next(iter(prev_manifests.values()))["Labels"][
             "org.opencontainers.image.revision"
@@ -319,9 +444,11 @@ def generate_changelog(
     handwritten: str | None,
     target: str,
     pretty: str | None,
-    workdir: str,
+    workdir: str | None,
     prev_manifests,
     manifests,
+    upstream_curr_manifests: dict[str, Any] | None = None,
+    upstream_prev_manifests: dict[str, Any] | None = None,
 ):
     common, others = get_package_groups(prev_manifests, manifests)
     versions = get_versions(manifests)
@@ -374,6 +501,14 @@ def generate_changelog(
 
     changes = ""
     changes += get_commits(prev_manifests, manifests, workdir)
+
+    # Add upstream base image changes (pass pre-fetched manifests to avoid redundant network calls)
+    try:
+        upstream = get_upstream_section(target, upstream_curr_manifests, upstream_prev_manifests)
+        changes += upstream
+    except Exception as e:
+        print(f"Error adding upstream section: {e}")
+
     common = calculate_changes(common, prev_versions, versions)
     if common:
         changes += COMMON_PAT.format(changes=common)
@@ -394,9 +529,9 @@ def main():
     parser.add_argument("target", nargs="?", default=None, help="Target tag (default: stable)")
     parser.add_argument("output", nargs="?", default=None, help="Output environment file (optional)")
     parser.add_argument("changelog", nargs="?", default=None, help="Output changelog file (optional)")
-    parser.add_argument("--pretty", help="Subject for the changelog")
-    parser.add_argument("--workdir", help="Git directory for commits")
-    parser.add_argument("--handwritten", help="Handwritten changelog")
+    parser.add_argument("--pretty", default=None, help="Subject for the changelog")
+    parser.add_argument("--workdir", default=".", help="Git directory for commits (default: current directory)")
+    parser.add_argument("--handwritten", default=None, help="Handwritten changelog")
     args = parser.parse_args()
 
     # Remove refs/tags, refs/heads, refs/remotes e.g.
@@ -409,12 +544,33 @@ def main():
     if target == "main":
         target = "stable"
 
+    # Fetch current Serpentine manifests
+    print(f"\n=== Fetching Serpentine {target} manifests ===")
     manifests = get_manifests(target)
     prev, curr = get_tags(target, manifests)
     print(f"Previous tag: {prev}")
     print(f" Current tag: {curr}")
 
+    # Fetch previous Serpentine manifests
+    print(f"\n=== Fetching Serpentine {prev} manifests ===")
     prev_manifests = get_manifests(prev)
+
+    # Fetch upstream manifests (both current and previous) to avoid redundant calls
+    print(f"\n=== Fetching upstream base image manifests ===")
+    upstream_curr_manifests = get_upstream_manifests(target)
+
+    upstream_prev_manifests = {}
+    if upstream_curr_manifests:
+        try:
+            # Derive upstream tags from the current upstream manifest
+            upstream_prev_tag, _ = get_tags(target, upstream_curr_manifests)
+            print(f"Fetching upstream {upstream_prev_tag} manifests for comparison...")
+            upstream_prev_manifests = get_upstream_manifests(upstream_prev_tag)
+        except Exception as e:
+            print(f"Could not fetch upstream previous manifests: {e}")
+
+    # Generate changelog with all pre-fetched manifests
+    print(f"\n=== Generating changelog ===")
     title, changelog = generate_changelog(
         args.handwritten,
         target,
@@ -422,18 +578,22 @@ def main():
         args.workdir,
         prev_manifests,
         manifests,
+        upstream_curr_manifests,
+        upstream_prev_manifests,
     )
 
-    print(f"Changelog:\n# {title}\n{changelog}")
+    print(f"\nChangelog:\n# {title}\n{changelog}")
     print(f'\nOutput:\nTITLE="{title}"\nTAG={curr}')
 
     if args.changelog:
         with open(args.changelog, "w") as f:
             f.write(changelog)
+        print(f"Changelog written to: {args.changelog}")
 
     if args.output:
         with open(args.output, "w") as f:
             f.write(f'TITLE="{title}"\nTAG={curr}\n')
+        print(f"Output variables written to: {args.output}")
 
 
 if __name__ == "__main__":
