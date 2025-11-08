@@ -17,7 +17,12 @@ IMAGES = [
 
 # Upstream (base) image used to build Serpentine
 UPSTREAM_IMAGE = "ublue-os/bazzite-deck"
+
+# Container registry URL for upstream
 UPSTREAM_REGISTRY = "docker://ghcr.io/"
+
+# URL template for upstream releases
+UPSTREAM_RELEASE_URL = "https://github.com/ublue-os/bazzite/releases/tag/{upstream_tag}"
 
 RETRIES = 3
 RETRY_WAIT = 5
@@ -40,7 +45,8 @@ OTHER_NAMES = {
 
 # Template for upstream base image changes section with major packages
 # Note: Double braces {{pkgrel:...}} are escaped for .format() call, then replaced with single braces
-UPSTREAM_PAT = f"""### Upstream Base Image ({UPSTREAM_IMAGE})
+UPSTREAM_PAT = f"""### Upstream Base Image [{UPSTREAM_IMAGE}]({UPSTREAM_RELEASE_URL})
+**Release Date:** {{upstream_created}}
 
 #### Major packages (from upstream: {UPSTREAM_IMAGE})
 | Name | Version |
@@ -58,12 +64,18 @@ UPSTREAM_PAT = f"""### Upstream Base Image ({UPSTREAM_IMAGE})
 
 """
 
+# Template for commits section
 COMMITS_FORMAT = (
     "### Commits\n| Hash | Subject | Author |\n| --- | --- | --- |{commits}\n\n"
 )
+
+# Template for individual commit entries
 COMMIT_FORMAT = "\n| **[{short}](https://github.com/" + AUTHOR + "/" + BASE_IMAGE_NAME + "/commit/{hash})** | {subject} | {author} |"
 
+# Template for changelog title
 CHANGELOG_TITLE = "{tag}: {pretty}"
+
+# Main changelog template
 CHANGELOG_FORMAT = """\
 {handwritten}
 
@@ -253,8 +265,27 @@ def get_upstream_section(
         if not chg:
             return ""
 
+        # Extract upstream creation date
+        first = next(iter(upstream_curr.values()))
+        from datetime import datetime
+        upstream_created = "unknown"
+        if "Created" in first and first["Created"]:
+            try:
+                # Try parsing ISO format
+                upstream_created = datetime.strptime(first["Created"], "%Y-%m-%dT%H:%M:%SZ").strftime("%a %b %d %H:%M:%S %Y")
+            except Exception:
+                try:
+                    # Fallback to UNIX timestamp
+                    upstream_created = time.strftime("%a %b %d %H:%M:%S %Y", time.gmtime(int(first["Created"])))
+                except Exception:
+                    upstream_created = "unknown"
+
         # Build upstream section with major packages
-        upstream_section = UPSTREAM_PAT.format(changes=chg)
+        upstream_section = UPSTREAM_PAT.format(
+            changes=chg,
+            upstream_tag=curr_tag,
+            upstream_created=upstream_created,
+        )
 
         # Replace major package version placeholders
         for pkg, v in curr_versions.items():

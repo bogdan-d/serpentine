@@ -18,10 +18,33 @@
  * Container manifest information from skopeo inspection
  */
 interface Manifest {
+  /** Image name / repository */
+  Name?: string;
+  /** Image digest */
+  Digest?: string;
   /** Repository tags associated with the manifest */
   RepoTags: string[];
+  /** Creation timestamp */
+  Created?: string;
+  /** Docker / build tool version */
+  DockerVersion?: string;
   /** Container labels including package information */
   Labels?: Record<string, string>;
+  /** CPU architecture */
+  Architecture?: string;
+  /** Operating system */
+  Os?: string;
+  /** Layers (digest list) */
+  Layers?: string[];
+  /** Rich layer objects with metadata (size, mime, annotations) */
+  LayersData?: Array<{
+    MIMEType?: string;
+    Digest?: string;
+    Size?: number;
+    Annotations?: Record<string, any> | null;
+  }>;
+  /** Environment variables as an array */
+  Env?: string[];
 }
 
 /**
@@ -87,7 +110,10 @@ const IMAGES = [
 const UPSTREAM_IMAGE = "ublue-os/bazzite-deck";
 
 /** Container registry URL for upstream */
-const UPSTREAM_REGISTRY = `docker://ghcr.io/`;
+const UPSTREAM_REGISTRY = "docker://ghcr.io/";
+
+/** URL template for upstream releases */
+const UPSTREAM_RELEASE_URL = "https://github.com/ublue-os/bazzite/releases/tag/{upstream_tag}";
 
 /** Number of retry attempts for network operations */
 const RETRIES = 3;
@@ -135,9 +161,10 @@ const OTHER_NAMES: Record<string, string> = {
 };
 
 /** Template for upstream base image changes section with major packages */
-const UPSTREAM_PAT = `### Upstream Base Image (${UPSTREAM_IMAGE})
+const UPSTREAM_PAT = `## Upstream Base Image [${UPSTREAM_IMAGE}](${UPSTREAM_RELEASE_URL})
+**Release Date:** {upstream_created}
 
-#### Major packages (from upstream: ${UPSTREAM_IMAGE})
+### Major packages (from upstream: ${UPSTREAM_IMAGE})
 | Name | Version |
 | --- | --- |
 | **Kernel** | {pkgrel:kernel} |
@@ -147,7 +174,7 @@ const UPSTREAM_PAT = `### Upstream Base Image (${UPSTREAM_IMAGE})
 | **KDE** | {pkgrel:plasma-desktop} |
 | **[HHD](https://github.com/hhd-dev/hhd)** | {pkgrel:hhd} |
 
-#### Package changes (from upstream: ${UPSTREAM_IMAGE})
+### Package changes (from upstream: ${UPSTREAM_IMAGE})
 | | Name | Previous | New |
 | --- | --- | --- | --- |{changes}
 
@@ -442,8 +469,16 @@ async function getUpstreamSection(
     const chg = calculateChanges(pkgs, prevVersions, currVersions);
     if (!chg) return "";
 
+    // Extract upstream creation date
+    const first = Object.values(upstreamCurr)[0] as Manifest;
+    const upstreamDate = first.Created ? (new Date(first.Created)).toString() : "unknown";
+
     // Build upstream section with major packages
-    let upstreamSection = UPSTREAM_PAT.replace("{changes}", chg);
+    let upstreamSection = UPSTREAM_PAT
+      .replace("{changes}", chg)
+      .replace("{upstream_created}", upstreamDate)
+      .replace("{upstream_tag}", currTag)
+      ;
 
     // Replace major package version placeholders
     for (const [pkg, v] of Object.entries(currVersions)) {
