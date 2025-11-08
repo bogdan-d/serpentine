@@ -46,9 +46,9 @@ OTHER_NAMES = {
 # Template for upstream base image changes section with major packages
 # Note: Double braces {{pkgrel:...}} are escaped for .format() call, then replaced with single braces
 UPSTREAM_PAT = f"""### Upstream Base Image [{UPSTREAM_IMAGE}]({UPSTREAM_RELEASE_URL})
-**Release Date:** {{upstream_created}}
+**Release Date:** `{{upstream_created}}` (_{{time_ago}}_)
 
-#### Major packages (from upstream: {UPSTREAM_IMAGE})
+#### Major packages (from upstream: `{UPSTREAM_IMAGE}`)
 | Name | Version |
 | --- | --- |
 | **Kernel** | {{{{pkgrel:kernel}}}} |
@@ -267,7 +267,7 @@ def get_upstream_section(
 
         # Extract upstream creation date
         first = next(iter(upstream_curr.values()))
-        from datetime import datetime
+        from datetime import datetime, timezone
         upstream_created = "unknown"
         if "Created" in first and first["Created"]:
             try:
@@ -280,11 +280,28 @@ def get_upstream_section(
                 except Exception:
                     upstream_created = "unknown"
 
+        # Calculate time ago
+        time_ago = "unknown"
+        if upstream_created != "unknown":
+            try:
+                created_time = datetime.strptime(upstream_created, "%a %b %d %H:%M:%S %Y").replace(tzinfo=timezone.utc)
+                delta = datetime.now(timezone.utc) - created_time
+                days = delta.days
+                if days == 0:
+                    time_ago = "today"
+                elif days == 1:
+                    time_ago = "1 day ago"
+                else:
+                    time_ago = f"{days} days ago"
+            except Exception:
+                time_ago = "unknown"
+
         # Build upstream section with major packages
         upstream_section = UPSTREAM_PAT.format(
             changes=chg,
             upstream_tag=curr_tag,
             upstream_created=upstream_created,
+            time_ago=time_ago,
         )
 
         # Replace major package version placeholders

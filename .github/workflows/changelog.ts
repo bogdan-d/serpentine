@@ -162,9 +162,9 @@ const OTHER_NAMES: Record<string, string> = {
 
 /** Template for upstream base image changes section with major packages */
 const UPSTREAM_PAT = `## Upstream Base Image [${UPSTREAM_IMAGE}](${UPSTREAM_RELEASE_URL})
-**Release Date:** {upstream_created}
+**Release Date:** \`{upstream_created}\` (_{time_ago}_)
 
-### Major packages (from upstream: ${UPSTREAM_IMAGE})
+### Major packages (from upstream: \`${UPSTREAM_IMAGE}\`)
 | Name | Version |
 | --- | --- |
 | **Kernel** | {pkgrel:kernel} |
@@ -472,11 +472,29 @@ async function getUpstreamSection(
     // Extract upstream creation date
     const first = Object.values(upstreamCurr)[0] as Manifest;
     const upstreamDate = first.Created ? (new Date(first.Created)).toString() : "unknown";
+    let timeAgo = "unknown";
+    if (first.Created) {
+      try {
+        const createdTime = new Date(first.Created);
+        const delta = new Date().getTime() - createdTime.getTime();
+        const days = Math.floor(delta / (1000 * 60 * 60 * 24));
+        if (days === 0) {
+          timeAgo = "today";
+        } else if (days === 1) {
+          timeAgo = "1 day ago";
+        } else {
+          timeAgo = `${days} days ago`;
+        }
+      } catch (error) {
+        timeAgo = "unknown";
+      }
+    }
 
     // Build upstream section with major packages
     let upstreamSection = UPSTREAM_PAT
       .replace("{changes}", chg)
       .replace("{upstream_created}", upstreamDate)
+      .replace("{time_ago}", timeAgo)
       .replace("{upstream_tag}", currTag)
       ;
 
