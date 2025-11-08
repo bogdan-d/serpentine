@@ -131,7 +131,6 @@ const OTHER_NAMES: Record<string, string> = {
   desktop: "### Desktop Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
   deck: "### Deck Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
   kde: "### KDE Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
-  gnome: "### Gnome Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
   nvidia: "### Nvidia Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
 };
 
@@ -145,7 +144,6 @@ const UPSTREAM_PAT = `### Upstream Base Image (${UPSTREAM_IMAGE})
 | **Firmware** | {pkgrel:atheros-firmware} |
 | **Mesa** | {pkgrel:mesa-filesystem} |
 | **Gamescope** | {pkgrel:gamescope} |
-| **Gnome** | {pkgrel:gnome-control-center-filesystem} |
 | **KDE** | {pkgrel:plasma-desktop} |
 | **[HHD](https://github.com/hhd-dev/hhd)** | {pkgrel:hhd} |
 
@@ -176,7 +174,6 @@ From previous \`{target}\` version \`{prev}\` there have been the following chan
 | **Firmware** | {pkgrel:atheros-firmware} |
 | **Mesa** | {pkgrel:mesa-filesystem} |
 | **Gamescope** | {pkgrel:gamescope} |
-| **Gnome** | {pkgrel:gnome-control-center-filesystem} |
 | **KDE** | {pkgrel:plasma-desktop} |
 | **[HHD](https://github.com/hhd-dev/hhd)** | {pkgrel:hhd} |
 
@@ -200,7 +197,6 @@ const BLACKLIST_VERSIONS = [
   "kernel",
   "mesa-filesystem",
   "gamescope",
-  "gnome-control-center-filesystem",
   "plasma-desktop",
   "atheros-firmware",
 ];
