@@ -1,7 +1,7 @@
 name: Cleanup Old Images
 on:
   schedule:
-    - cron: "15 0 * * *" # 0015 UTC everyday
+    - cron: "30 05 * * *" # 0530 UTC everyday
   workflow_dispatch:
 
 concurrency:
