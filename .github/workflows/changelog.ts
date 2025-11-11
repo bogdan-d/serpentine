@@ -161,8 +161,12 @@ const OTHER_NAMES: Record<string, string> = {
 };
 
 /** Template for upstream base image changes section with major packages */
-const UPSTREAM_PAT = `## Upstream Base Image [${UPSTREAM_IMAGE}](${UPSTREAM_RELEASE_URL})
+const UPSTREAM_PAT = `---
+
+## Upstream Base Image [${UPSTREAM_IMAGE}](${UPSTREAM_RELEASE_URL})
 **Release Date:** \`{upstream_created}\` (_{time_ago}_)
+
+---
 
 ### Major packages (from upstream: \`${UPSTREAM_IMAGE}\`)
 | Name | Version |

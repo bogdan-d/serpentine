@@ -45,8 +45,12 @@ OTHER_NAMES = {
 
 # Template for upstream base image changes section with major packages
 # Note: Double braces {{pkgrel:...}} are escaped for .format() call, then replaced with single braces
-UPSTREAM_PAT = f"""### Upstream Base Image [{UPSTREAM_IMAGE}]({UPSTREAM_RELEASE_URL})
+UPSTREAM_PAT = f"""---
+
+### Upstream Base Image [{UPSTREAM_IMAGE}]({UPSTREAM_RELEASE_URL})
 **Release Date:** `{{upstream_created}}` (_{{time_ago}}_)
+
+---
 
 #### Major packages (from upstream: `{UPSTREAM_IMAGE}`)
 | Name | Version |
