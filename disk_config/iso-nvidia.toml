@@ -19,3 +19,7 @@ enable = [
 disable = [
   "org.fedoraproject.Anaconda.Modules.Subscription",
 ]
+
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "20 GiB"
