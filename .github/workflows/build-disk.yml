@@ -68,6 +68,9 @@ jobs:
           echo "USER_UID=${USER_UID}" >> ${GITHUB_ENV}
           echo "USER_GID=${USER_GID}" >> ${GITHUB_ENV}
 
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+
       - name: Install dependencies
         if: inputs.platform == 'arm64'
         run: |
@@ -80,8 +83,47 @@ jobs:
         if: inputs.platform != 'arm64'
         uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
 
+      - name: Cleanup Docker images and caches
+        if: inputs.platform != 'arm64'
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          echo "::group::Disk usage before cleanup"
+          df -h
+          echo "::endgroup::"
+
+          echo "::group::Docker cleanup"
+          if command -v docker &>/dev/null; then
+            docker system prune -af || true
+            docker volume prune -f || true
+            docker builder prune -af || true
+          fi
+          echo "::endgroup::"
+
+          echo "::group::APT cache cleanup"
+          if command -v apt-get &>/dev/null; then
+            sudo apt-get clean || true
+            sudo rm -rf /var/lib/apt/lists/* || true
+          fi
+          echo "::endgroup::"
+
+          echo "::group::General temp cleanup"
+          sudo rm -rf /tmp/* || true
+          sudo rm -rf /var/tmp/* || true
+          echo "::endgroup::"
+
+          echo "::group::Disk usage after cleanup"
+          df -h
+          echo "::endgroup::"
+
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+
+      # You only use this action if the container-storage-action proves to be unreliable, you don't need to enable both
+      # This is optional, but if you see that your builds are way too big for the runners, you can enable this by uncommenting the following lines:
+      - name: Maximize build space
+        uses: ublue-os/remove-unwanted-software@695eb75bc387dbcd9685a8e72d23439d8686cba6
 
       - name: Build disk images
         id: build
@@ -95,9 +137,75 @@ jobs:
           rootfs: btrfs
           additional-args: --use-librepo=True
 
+      - name: List Outputs
+        env:
+          OUTPUT_PATHS_JSON: ${{ steps.build.outputs.output-paths }}
+          QCOW2_OUTPUT_PATH: ${{ steps.build.outputs.qcow2-output-path }}
+          VMDK_OUTPUT_PATH: ${{ steps.build.outputs.vmdk-output-path }}
+          ANACONDA_ISO_OUTPUT_PATH:
+            ${{ steps.build.outputs.anaconda-iso-output-path }}
+          RAW_OUTPUT_PATH: ${{ steps.build.outputs.raw-output-path }}
+          VHD_OUTPUT_PATH: ${{ steps.build.outputs.vhd-output-path }}
+        run: |
+          set -x
+
+          echo "Output Directory: ${{ steps.build.outputs.output-directory }}"
+          echo "Manifest Path: ${{ steps.build.outputs.manifest-path }}"
+          echo "Output Paths: $OUTPUT_PATHS_JSON"
+
+          # Check the manifest file type
+          file ${{ steps.build.outputs.manifest-path }}
+
+          # For each key in the JSON map, output the type (key), path, and checksum
+          for OUTPUT in $(echo "$OUTPUT_PATHS_JSON" | jq -r 'keys[]'); do
+            # Extract the type, path, and checksum for each output
+            OUTPUT_TYPE=$(echo "$OUTPUT_PATHS_JSON" | jq -r ".\"$OUTPUT\".type")
+            OUTPUT_PATH=$(echo "$OUTPUT_PATHS_JSON" | jq -r ".\"$OUTPUT\".path")
+            OUTPUT_CHECKSUM=$(echo "$OUTPUT_PATHS_JSON" | jq -r ".\"$OUTPUT\".checksum")
+
+            # Output the extracted information
+            echo "Output Type: $OUTPUT_TYPE"
+            file "$OUTPUT_PATH"
+
+            # Verify checksum
+            if [ "$OUTPUT_CHECKSUM" != "$(sha256sum "$OUTPUT_PATH" | cut -d ' ' -f 1)" ]; then
+              echo "Checksums do not match"
+            fi
+          done
+
+          echo "QCOW2 Output Path: $QCOW2_OUTPUT_PATH"
+          file "$QCOW2_OUTPUT_PATH"
+          if [ -n "$QCOW2_OUTPUT_PATH" ]; then
+            sha256sum "$QCOW2_OUTPUT_PATH"
+          fi
+
+          echo "VMDK Output Path: $VMDK_OUTPUT_PATH"
+          file "$VMDK_OUTPUT_PATH"
+          if [ -n "$VMDK_OUTPUT_PATH" ]; then
+            sha256sum "$VMDK_OUTPUT_PATH"
+          fi
+
+          echo "Anaconda ISO Output Path: $ANACONDA_ISO_OUTPUT_PATH"
+          file "$ANACONDA_ISO_OUTPUT_PATH"
+          if [ -n "$ANACONDA_ISO_OUTPUT_PATH" ]; then
+            sha256sum "$ANACONDA_ISO_OUTPUT_PATH"
+          fi
+
+          echo "RAW Output Path: $RAW_OUTPUT_PATH"
+          file "$RAW_OUTPUT_PATH"
+          if [ -n "$RAW_OUTPUT_PATH" ]; then
+            sha256sum "$RAW_OUTPUT_PATH"
+          fi
+
+          echo "VHD Output Path: $VHD_OUTPUT_PATH"
+          file "$VHD_OUTPUT_PATH"
+          if [ -n "$VHD_OUTPUT_PATH" ]; then
+            sha256sum "$VHD_OUTPUT_PATH"
+          fi
+
       - name: Upload disk images and Checksums to Job Artifacts
         if: inputs.upload-to-s3 != true && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v4
+        uses: actions/upload-artifact@v5
         with:
           path: ${{ steps.build.outputs.output-directory }}
           if-no-files-found: error

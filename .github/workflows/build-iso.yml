@@ -3,12 +3,12 @@ name: Build Serpentine ISO
 on:
   workflow_dispatch:
   workflow_call:
-  workflow_run:
-    workflows: ["Build Serpentine"]
-    types:
-      - completed
-    branches:
-      - main
+  # workflow_run:
+  #   workflows: ["Build Serpentine"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - main
 
 env:
   IMAGE_NAME: "${{ github.event.repository.name }}"  # output image name, usually same as repo name
@@ -120,7 +120,7 @@ jobs:
           fi
 
       - name: Upload ISO artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: serpentine-${{ env.IMAGE_NAME }}-iso
           path: output/bootiso/install.iso
