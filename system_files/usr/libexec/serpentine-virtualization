@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# Enable libvirt
+sudo systemctl enable --now libvirtd 2> /dev/null
+
+# Install virt-manager if not installed from rpm or flatpak
+if ! rpm -q virt-manager >/dev/null 2>&1 && ! flatpak list | grep -q "org.virt_manager.virt-manager"; then
+    echo "Installing virt-manager flatpak..."
+    flatpak install flathub org.virt_manager.virt-manager
+fi
+
+echo "Adding KVM kernel arguments"
+rpm-ostree kargs \
+    --append-if-missing="kvm.ignore_msrs=1" \
+    --append-if-missing="kvm.report_ignored_msrs=0"
+
+echo "Making sure swtpm will work"
+if [ ! -d "/var/lib/swtpm-localca" ]; then
+    sudo mkdir /var/lib/swtpm-localca
+fi
+sudo chown tss /var/lib/swtpm-localca
+sudo restorecon -rv /var/lib/libvirt
+sudo restorecon -rv /var/log/libvirt
+
+echo "Giving qemu access to read ISO files from $HOME"
+sudo setfacl -m u:qemu:rx "$HOME"
+
+# Add libvirt qemu hooks for GPU passthrough
+if sudo test ! -f "/etc/libvirt/hooks/qemu"; then
+    echo "Adding libvirt qemu hooks"
+    sudo wget 'https://raw.githubusercontent.com/PassthroughPOST/VFIO-Tools/master/libvirt_hooks/qemu' -O /etc/libvirt/hooks/qemu
+    sudo chmod +x /etc/libvirt/hooks/qemu
+    sudo grep -A1 -B1 "# Add" /etc/libvirt/hooks/qemu | sed 's/^# //g'
+    if sudo test ! -d "/etc/libvirt/hooks/qemu.d"; then
+        sudo mkdir /etc/libvirt/hooks/qemu.d
+    fi
+fi
+
+# Enable libvirtd setup service at boot
+sudo systemctl enable bazzite-libvirtd-setup.service \
+    && echo "libvirtd will be enabled at next reboot"
+
+# Add udev rule for USB device access in VMs
+echo "Adding udev rule for USB devices"
+    sudo bash -c 'cat << USBHP_UDEV > /etc/udev/rules.d/72-usbhp.rules
+ACTION=="add" SUBSYSTEM=="usb", TAG+="uaccess"
+USBHP_UDEV'
+
+# Add user to libvirt group
+if ! grep -q "^libvirt" /etc/group; then
+    grep '^libvirt' /usr/lib/group | sudo tee -a /etc/group > /dev/null
+fi
+sudo usermod -aG libvirt "$USER"
+
+echo 'Please reboot to apply changes'
