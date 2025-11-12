@@ -15,3 +15,5 @@ version-script vscode-extensions-dx user 1 || exit 1
 # code --install-extension ms-vscode-remote.remote-containers
 # code --install-extension ms-vscode-remote.remote-ssh
 # code --install-extension ms-azuretools.vscode-containers
+
+# set +x

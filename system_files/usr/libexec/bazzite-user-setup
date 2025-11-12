@@ -20,15 +20,17 @@ BAZZITE_CONFIG_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/bazzite"
 mkdir -p "$BAZZITE_CONFIG_DIR"
 
 # SCRIPT VERSION
-USER_SETUP_VER=46
+USER_SETUP_VER="46.1"
 USER_SETUP_VER_FILE="$BAZZITE_CONFIG_DIR/version"
 USER_SETUP_FEDORA_VER_FILE="$BAZZITE_CONFIG_DIR/fedora_version"
 USER_SETUP_IMAGE_VER_FILE=$BAZZITE_CONFIG_DIR/image_name""
 
+# Old state file migration
 if [[ -f "$HOME/.bazzite-configured" ]]; then
   mv -f "$HOME/.bazzite-configured" "$USER_SETUP_VER_FILE"
 fi
 
+# Old fedora version file migration
 if [[ -f "$HOME/.bazzite-configured-fedora-version" ]]; then
   mv -f "$HOME/.bazzite-configured-fedora-version" "$USER_SETUP_FEDORA_VER_FILE"
 fi
@@ -48,6 +50,7 @@ fi
 # Handle privileged tasks
 pkexec /usr/libexec/bazzite-privileged-user-setup "$USER"
 
+# Setup Ptyxis themes
 PTYXIS_THEME_DIR="/etc/skel/.local/share/org.gnome.Ptyxis/palettes"
 PTYXIS_DIR="$HOME/.local/share/org.gnome.Ptyxis/palettes"
 mkdir -p "$PTYXIS_DIR"
@@ -80,6 +83,7 @@ if [[ ! -f "$BAZZITE_CONFIG_DIR/bazaar-fix" ]]; then
   touch "$BAZZITE_CONFIG_DIR/bazaar-fix"
 fi
 
+# Image specific setup
 if [[ $BASE_IMAGE_NAME =~ "kinoite" ]]; then
   echo 'Running setup for Kinoite'
 
