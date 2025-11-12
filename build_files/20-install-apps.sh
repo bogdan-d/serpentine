@@ -29,9 +29,17 @@ tee /etc/modules-load.d/ip_tables.conf <<EOF
 iptable_nat
 EOF
 
+# Packages to remove from the base image that we don't want
+REMOVE_FEDORA_PACKAGES=(
+    kate
+    kate-krunner-plugin
+    kate-libs
+    kate-plugins
+)
+
 # Packages installed as a group. Keep this list alphabetized where practical
 # to make diffs smaller when adding/removing packages.
-FEDORA_PACKAGES=(
+INSTALL_FEDORA_PACKAGES=(
     android-tools
     bcc
     bpftop
@@ -83,15 +91,19 @@ FEDORA_PACKAGES=(
     trace-cmd
     udica
     usbmuxd
-    virt-manager
+    # virt-manager - we will use the flatpak version
     virt-v2v
     virt-viewer
     ydotool
 )
 
 # Install the package group in one go
-echo "Installing ${#FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
-dnf5 install -y "${FEDORA_PACKAGES[@]}"
+echo "Installing ${#INSTALL_FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
+dnf5 install -y "${INSTALL_FEDORA_PACKAGES[@]}"
+
+# Remove unwanted packages in one go
+echo "Removing ${#REMOVE_FEDORA_PACKAGES[@]} unwanted packages from Fedora base image..."
+dnf5 remove -y "${REMOVE_FEDORA_PACKAGES[@]}"
 
 # Docker packages from their repo
 echo "Installing Docker from official repo..."

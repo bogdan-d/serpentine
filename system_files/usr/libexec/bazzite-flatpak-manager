@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 # SCRIPT VERSION
-VER=29
+VER=30
 VER_FILE="/etc/bazzite/flatpak_manager_version"
 VER_RAN=$(cat $VER_FILE)
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
@@ -55,6 +55,12 @@ flatpak override \
   --system \
   --env=MOZ_USE_XINPUT2=1 \
   org.mozilla.firefox
+  
+# XInput for Zen
+flatpak override \
+  --system \
+  --env=MOZ_USE_XINPUT2=1 \
+  app.zen_browser.zen
 
 # Fix printing on LibreOffice
 flatpak override \
@@ -100,6 +106,16 @@ if [[ $IMAGE_NAME =~ "nvidia" ]] && [ "$(grep -o "\-display" <<< "$(lshw -C disp
     --env=MOZ_DISABLE_RDD_SANDBOX=1 \
     --env=NVD_BACKEND=direct \
     org.mozilla.firefox
+    
+  flatpak override \
+    --system \
+    --filesystem=host-os \
+    --env=LIBVA_DRIVER_NAME=nvidia \
+    --env=LIBVA_DRIVERS_PATH=/run/host/usr/lib64/dri \
+    --env=LIBVA_MESSAGING_LEVEL=1 \
+    --env=MOZ_DISABLE_RDD_SANDBOX=1 \
+    --env=NVD_BACKEND=direct \
+    app.zen_browser.zen
 else
   # Undo if user was previously using a Nvidia image and is no longer
   flatpak override \
@@ -111,12 +127,28 @@ else
     --unset-env=MOZ_DISABLE_RDD_SANDBOX \
     --unset-env=NVD_BACKEND \
     org.mozilla.firefox
+    
+  flatpak override \
+    --system \
+    --nofilesystem=host-os \
+    --unset-env=LIBVA_DRIVER_NAME \
+    --unset-env=LIBVA_DRIVERS_PATH \
+    --unset-env=LIBVA_MESSAGING_LEVEL \
+    --unset-env=MOZ_DISABLE_RDD_SANDBOX \
+    --unset-env=NVD_BACKEND \
+    app.zen_browser.zen
 fi
 
 # Set up Firefox default configuration
-mkdir -p /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref
-rm -f /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref/*bazzite*.js
-/usr/bin/cp -rf /usr/share/ublue-os/firefox-config/* /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref/
+mkdir -p \
+  /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref \
+  /var/lib/flatpak/extension/app.zen_browser.zen.systemconfig/x86_64/stable/defaults/pref
+rm -f \
+  /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref/*bazzite*.js \
+  /var/lib/flatpak/extension/app.zen_browser.zen.systemconfig/x86_64/stable/defaults/pref/*bazzite*.js
+
+/usr/bin/cp -rf /usr/share/serpentine/firefox-config/* /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref/
+/usr/bin/cp -rf /usr/share/serpentine/zen-config/* /var/lib/flatpak/extension/app.zen_browser.zen.systemconfig/x86_64/stable/defaults/pref/
 
 mkdir -p /etc/bazzite
 echo "$VER" > "$VER_FILE"
