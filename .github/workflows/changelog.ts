@@ -232,6 +232,10 @@ const BLACKLIST_VERSIONS = [
   "atheros-firmware",
 ];
 
+const PKG_ALIAS = {
+  "hhd-git": "hhd",
+};
+
 // ============================================================================
 // UTILITY FUNCTIONS
 // ============================================================================
@@ -506,12 +510,12 @@ async function getUpstreamSection(
     for (const [pkg, v] of Object.entries(currVersions)) {
       if (!prevVersions[pkg] || prevVersions[pkg] === v) {
         upstreamSection = upstreamSection.replace(
-          `{pkgrel:${pkg}}`,
+          `{pkgrel:${PKG_ALIAS[pkg] || pkg}}`,
           PATTERN_PKGREL.replace("{version}", v)
         );
       } else {
         upstreamSection = upstreamSection.replace(
-          `{pkgrel:${pkg}}`,
+          `{pkgrel:${PKG_ALIAS[pkg] || pkg}}`,
           PATTERN_PKGREL_CHANGED.replace("{prev}", prevVersions[pkg]).replace("{new}", v)
         );
       }

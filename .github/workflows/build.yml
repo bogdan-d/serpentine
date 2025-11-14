@@ -1,6 +1,8 @@
 ---
 name: Build Serpentine
 on:
+  schedule:
+    - cron: '05 05 */2 * *'  # 05:05am UTC every 2 days
   pull_request:
     branches:
       - main
@@ -11,8 +13,6 @@ on:
       - '**/LICENSE'
       - '**/README.md'
       - '**/SETUP.md'
-  schedule:
-    - cron: '05 05 * * *'  # 05:05am UTC everyday
   push:
     branches:
       - main
@@ -39,7 +39,7 @@ env:
   DEFAULT_TAG: "latest"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.brand_name}}-${{ inputs.stream_name }}
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ github.event.inputs.brand_name || '' }}-${{ github.event.inputs.stream_name || '' }}
   cancel-in-progress: true
 
 jobs:
