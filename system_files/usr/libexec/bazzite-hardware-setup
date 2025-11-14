@@ -8,7 +8,7 @@ IMAGE_BRANCH=$(jq -r '."image-branch"' < $IMAGE_INFO)
 FEDORA_VERSION=$(jq -r '."fedora-version"' < $IMAGE_INFO)
 
 # SCRIPT VERSION
-HWS_VER=64
+HWS_VER=64.1
 HWS_VER_FILE="/etc/bazzite/hws_version"
 HWS_VER_RAN=$(cat $HWS_VER_FILE)
 
@@ -186,11 +186,9 @@ fi
 # FRAMEWORK AMD FIXES
 if [[ ":Framework:" =~ ":$VEN_ID:" ]]; then
   if [[ "AuthenticAMD" == "$CPU_VENDOR" ]]; then
-    # Load Ryzen SMU on AMD Framework Laptops
-    if ! [[ -f "/etc/modules-load.d/ryzen_smu.conf" ]]; then
-      mkdir -p "/etc/modules-load.d"
-      printf "# Load ryzen_smu driver upon startup\nryzen_smu\n" >> "/etc/modules-load.d/ryzen_smu.conf"
-    fi
+    # Remove ryzen_smu module load if it exists
+    rm -rf /etc/modules-load.d/ryzen_smu.conf
+    
     # Framework 13 AMD fixes
     if [[ $SYS_ID == "Laptop ("* ]]; then
       if [[ ! -f /etc/modprobe.d/alsa.conf ]]; then
