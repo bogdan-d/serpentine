@@ -109,13 +109,18 @@ dnf5 remove -y "${REMOVE_FEDORA_PACKAGES[@]}"
 echo "Installing Docker from official repo..."
 dnf5 config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
 dnf5 config-manager setopt docker-ce-stable.enabled=0
-dnf5 -y install --enablerepo=docker-ce-stable \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-ce \
-    docker-ce-cli \
-    docker-compose-plugin \
+sed -i "s/enabled=.*/enabled=0/g" /etc/yum.repos.d/docker-ce.repo
+
+DOCKER_PACKAGES=(
+    containerd.io
+    docker-buildx-plugin
+    docker-ce
+    docker-ce-cli
+    # docker-ce-rootless-extras # this is needed for rootless mode, in case we want it later
+    docker-compose-plugin
     docker-model-plugin
+)
+dnf5 -y install --enablerepo=docker-ce-stable "${DOCKER_PACKAGES[@]}"
 
 # Install COPR packages with isolated repo enablement
 echo "Installing DX COPR packages with isolated repo enablement..."
