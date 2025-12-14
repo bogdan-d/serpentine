@@ -131,6 +131,11 @@ copr_install_isolated "gmaglione/podman-bootc" "podman-bootc"
 # and system_files/usr/share/ublue-os/user-setup.hooks.d
 copr_install_isolated "ublue-os/packages" "ublue-setup-services" "ublue-os-libvirt-workarounds"
 
+# Install RPM Fusion packages
+dnf5 -y install --enable-repo="*rpmfusion*" --disable-repo="*fedora-multimedia*" \
+    HandBrake \
+    HandBrake-gui
+
 # # Load iptable_nat module for docker-in-docker.
 # # See:
 # #   - https://github.com/ublue-os/bluefin/issues/2365
