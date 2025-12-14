@@ -7,7 +7,10 @@ fix_perms() {
         return 1
     fi
     for target in "$@"; do
-        [ -e "$target" ] || { echo "Not found: $target"; continue; }
+        [ -e "$target" ] || {
+            echo "Not found: $target"
+            continue
+        }
         find "$target" -type d -exec chmod 755 {} +
         find "$target" -type f -exec chmod 644 {} +
     done
