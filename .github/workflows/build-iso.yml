@@ -120,7 +120,7 @@ jobs:
           fi
 
       - name: Upload ISO artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: serpentine-${{ env.IMAGE_NAME }}-iso
           path: output/bootiso/install.iso
