@@ -13,7 +13,7 @@ enable-ryzenadj-max-performance:
     echo 'ACTION=="change", SUBSYSTEM=="power_supply", ATTR{online}=="0", RUN+="/usr/bin/ryzenadj --max-performance"' | sudo tee "/etc/udev/rules.d/99-ryzenadj-power-source-change.rules" > /dev/null
 
     sudo udevadm control --reload-rules
-    cat <<EOF | sudo tee /etc/systemd/system/max-perf-boot.service > /dev/null
+    sudo tee /etc/systemd/system/max-perf-boot.service > /dev/null <<'EOF'
 [Unit]
 Description=Apply RyzenAdj max performance at boot
 
