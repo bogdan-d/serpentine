@@ -50,7 +50,7 @@ install-speaker-firmware ACTION="":
     #!/bin/bash
     source /usr/lib/ujust/ujust.sh
     OPTION={{ ACTION }}
-    FIRMWARE_SCRIPT="https://raw.githubusercontent.com/hhd-dev/hwinfo/refs/heads/master/firmware/bazzite-speaker.sh"
+    FIRMWARE_SCRIPT="https://raw.githubusercontent.com/bazzite-org/hwinfo/refs/heads/master/firmware/bazzite-speaker.sh"
     curl -o "/tmp/bazzite-speaker.sh" "$FIRMWARE_SCRIPT" && cat /tmp/bazzite-speaker.sh | pygmentize -l bash -O style=emacs
     echo ""
     echo "Run the above script using elevated permissions?"

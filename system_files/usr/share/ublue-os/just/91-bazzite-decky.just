@@ -88,14 +88,14 @@ install-decky-plugins ACTION="":
     # Format: "owner|repo|plugin_name|filename"
     # filename must be the exact filename from the GitHub release
     declare -A PLUGINS
-    PLUGINS["bazzite-buddy"]="bazzite-org|decky-bazzite-buddy|Bazzite Buddy|Bazzite.Buddy.zip"
+    PLUGINS["bazzite-buddy"]="ublue-os|decky-bazzite-buddy|Bazzite Buddy|Bazzite.Buddy.zip"
     PLUGINS["decky-framegen"]="xXJSONDeruloXx|Decky-Framegen|Decky-Framegen|Decky-Framegen.zip"
     PLUGINS["decky-lsfg-vk"]="xXJSONDeruloXx|decky-lsfg-vk|decky-lsfg-vk|Decky.LSFG-VK.zip"
 
     # Core plugin installation function
     install_plugin() {
         local repo_owner="$1"
-        local repo_name="$2" 
+        local repo_name="$2"
         local plugin_name="$3"
         local filename="$4"
         local plugin_dir="$HOME/homebrew/plugins"

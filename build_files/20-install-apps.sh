@@ -59,6 +59,8 @@ INSTALL_FEDORA_PACKAGES=(
     # incus
     # incus-agent
     iotop
+    iwd
+    just
     libvirt
     libvirt-nss
     # lxc
@@ -70,6 +72,8 @@ INSTALL_FEDORA_PACKAGES=(
     podman-compose
     podman-machine
     podman-tui
+    powerstat
+    powertop
     # python3-ramalama
     qemu
     qemu-char-spice
@@ -132,9 +136,9 @@ copr_install_isolated "gmaglione/podman-bootc" "podman-bootc"
 copr_install_isolated "ublue-os/packages" "ublue-setup-services" "ublue-os-libvirt-workarounds"
 
 # Install RPM Fusion packages
-dnf5 -y install --enable-repo="*rpmfusion*" --disable-repo="*fedora-multimedia*" \
-    HandBrake \
-    HandBrake-gui
+# dnf5 -y install --enable-repo="*rpmfusion*" --disable-repo="*fedora-multimedia*" \
+#     HandBrake \
+#     HandBrake-gui
 
 # # Load iptable_nat module for docker-in-docker.
 # # See:

@@ -6,9 +6,10 @@ set -xeuo pipefail
 # systemctl enable input-remapper.service
 # systemctl enable uupd.timer
 
-# Remove -deck specific changes to allow for login screens
+# Remove -deck specific changes to allow for login screens and session selection in settings
 rm -fv /etc/sddm.conf.d/steamos.conf
 rm -fv /etc/sddm.conf.d/virtualkbd.conf
+rm -fv /etc/sddm.conf.d/zz-steamos-autologin.conf
 rm -fv /usr/share/gamescope-session-plus/bootstrap_steam.tar.gz
 systemctl disable bazzite-autologin.service
 dnf5 remove -y steamos-manager

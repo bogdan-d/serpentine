@@ -8,7 +8,7 @@ IMAGE_BRANCH=$(jq -r '."image-branch"' < $IMAGE_INFO)
 FEDORA_VERSION=$(jq -r '."fedora-version"' < $IMAGE_INFO)
 
 # SCRIPT VERSION
-HWS_VER=64.1
+HWS_VER=65
 HWS_VER_FILE="/etc/bazzite/hws_version"
 HWS_VER_RAN=$(cat $HWS_VER_FILE)
 
@@ -20,10 +20,17 @@ KNOWN_IMAGE_BRANCH=$(cat $KNOWN_IMAGE_BRANCH_FILE)
 KNOWN_FEDORA_VERSION_FILE="/etc/bazzite/fedora_version"
 KNOWN_FEDORA_VERSION=$(cat $KNOWN_FEDORA_VERSION_FILE)
 
+# NVIDIA DRIVER VERSION IDENTIFIERS
+if [[ $IMAGE_NAME =~ "nvidia" ]]; then
+    FLATPAK_NVIDIA_VERSION=$(flatpak list --runtime | grep nvidia | grep -Eo "[0-9]+-[0-9]+-[0-9]+" | tail -1)
+    SYSTEM_NVIDIA_VERSION=$(cat /proc/driver/nvidia/version | grep NVIDIA | grep -Eo "[0-9]+\.[0-9]+\.[0-9]+" | tr '.' '-')
+fi
+
 if [[ "$KNOWN_IMAGE_NAME" == "$IMAGE_NAME" && \
     "$KNOWN_IMAGE_BRANCH" == "$IMAGE_BRANCH" && \
     "$KNOWN_FEDORA_VERSION" == "$FEDORA_VERSION" && \
-    "$HWS_VER_RAN" == "$HWS_VER" ]]; then
+    "$HWS_VER_RAN" == "$HWS_VER" && \
+    "$SYSTEM_NVIDIA_VERSION" == "$FLATPAK_NVIDIA_VERSION" ]]; then
   echo "Hardware setup already ran for version $HWS_VER_RAN, skipping"
   exit 0
 fi
@@ -168,7 +175,6 @@ if [[ $IMAGE_NAME =~ "deck" || $IMAGE_NAME =~ "ally" ]]; then
     systemctl disable --now jupiter-biosupdate.service
     systemctl disable --now jupiter-controller-update.service
     systemctl disable --now ryzenadj.service
-    systemctl disable --now batterylimit.service
   fi
   systemctl enable --now ds-inhibit.service
 fi
@@ -188,7 +194,7 @@ if [[ ":Framework:" =~ ":$VEN_ID:" ]]; then
   if [[ "AuthenticAMD" == "$CPU_VENDOR" ]]; then
     # Remove ryzen_smu module load if it exists
     rm -rf /etc/modules-load.d/ryzen_smu.conf
-    
+
     # Framework 13 AMD fixes
     if [[ $SYS_ID == "Laptop ("* ]]; then
       if [[ ! -f /etc/modprobe.d/alsa.conf ]]; then
@@ -261,95 +267,10 @@ if (( $(hostname | wc -m) > 20 )); then
   hostnamectl set-hostname serpentine
 fi
 
-# PPD FIX
-# Correct broken config files on some systems
-if [[ -f "/etc/tuned/ppd.conf" ]] && ! grep "\[battery\]" "/etc/tuned/ppd.conf"; then
-  cp -f "/usr/etc/tuned/ppd.conf" "/etc/tuned/ppd.conf"
-fi
-
 # Set default target to graphical, fixes rebase from base image
 if grep -qv "graphical.target" <<< "$(systemctl get-default)"; then
   systemctl set-default graphical.target
 fi
-
-# Cleanup btrfs oopsie
-# default config has a 10 year limit, which is ridiculous
-# FIXME: This fix was added in 12/2024, remove it in a few months
-if [ ! -f /etc/bazzite/fixups/snapper_cleanup ] &&
-  [ -f /etc/snapper/configs/root ] &&
-  snapper --no-headers --csvout -c root get-config --columns key,value | grep -q "TIMELINE_LIMIT_YEARLY,10" &&
-  snapper --no-headers --csvout -c root get-config --columns key,value | grep -q "SUBVOLUME,/var/home"; then
-  echo "DELETING SNAPPER SNAPSHOTS CREATED BY A PREVIOUS UPDATE"
-  echo "THIS IS FOR /var/home. IF YOU INTENDED THIS CHANGE, "
-  echo "RECREATE YOUR CONFIG AND MAKE SURE TIMELINE_LIMIT_YEARLY=\"10\""
-  echo "IS SET TO SOMETHING DIFFERENT."
-  SNAPSHOTS=$(snapper --no-headers --csvout --config root list --columns number,description | grep timeline | awk -F, '{print $1}')
-  if [ -n "$SNAPSHOTS" ]; then
-    snapper -c root delete $SNAPSHOTS
-  fi
-  snapper -c root delete-config
-fi
-touch /etc/bazzite/fixups/snapper_cleanup
-
-if [ ! -f /etc/bazzite/fixups/grub_fixup ]; then
-  # Grub settings
-  # Set grub timeout to 5 seconds
-  if ! grep -q "GRUB_TIMEOUT=" /etc/default/grub; then
-    echo "GRUB_TIMEOUT=5" >> /etc/default/grub
-  else
-    sed -i 's/GRUB_TIMEOUT=[0-9]*/GRUB_TIMEOUT=5/' /etc/default/grub
-  fi
-
-  # Nuke hidden timeout as it will cause issues if GRUB_TIMEOUT exists
-  if grep -q "GRUB_HIDDEN_TIMEOUT=" /etc/default/grub; then
-    sed -i 's/GRUB_HIDDEN_TIMEOUT=[0-9]*//' /etc/default/grub
-  fi
-
-  # set timeout style to menu to show grub during countdown
-  # (unless GRUB_TIMEOUT=0)
-  if ! grep -q "GRUB_TIMEOUT_STYLE=" /etc/default/grub; then
-    echo "GRUB_TIMEOUT_STYLE=menu" >> /etc/default/grub
-  else
-    sed -i 's/GRUB_TIMEOUT_STYLE=.*/GRUB_TIMEOUT_STYLE=menu/' /etc/default/grub
-  fi
-
-  # Autohide grub menu if boot is successful
-  # menu_auto_hide=2 hides grub menu if previous boot is successful
-  # menu_auto_hide=1 same, except not if Windows/Other OS is installed
-  # Deck images cant use grub menu and often dual boot, so hide it always
-  # For desktop images, hide it only if no other OS is installed
-  # if [[ $IMAGE_NAME =~ "deck" ]]; then
-  #   grub2-editenv - set menu_auto_hide=2
-  # else
-  #   grub2-editenv - set menu_auto_hide=1
-  # fi
-  grub2-editenv - set menu_auto_hide=0
-
-  # Update grub
-  if [ -d /sys/firmware/efi ]; then
-    echo "Updating EFI grub config"
-    grub2-mkconfig -o /etc/grub2-efi.cfg
-  else
-    echo "Updating BIOS grub config"
-    grub2-mkconfig -o /etc/grub2.cfg
-  fi
-fi
-touch /etc/bazzite/fixups/grub_fixup
-
-if [ ! -f /etc/bazzite/fixups/grub_blank ] &&
-    ! grep -q "GRUB_TERMINAL_OUTPUT=" /etc/default/grub; then
-  echo 'GRUB_TERMINAL_OUTPUT="console"' >> /etc/default/grub
-
-  # Update grub
-  if [ -d /sys/firmware/efi ]; then
-    echo "Updating EFI grub config"
-    grub2-mkconfig -o /etc/grub2-efi.cfg
-  else
-    echo "Updating BIOS grub config"
-    grub2-mkconfig -o /etc/grub2.cfg
-  fi
-fi
-touch /etc/bazzite/fixups/grub_blank
 
 # Fix missing hostname file breaking distrobox
 if [ ! -f /etc/hostname ]; then
@@ -365,6 +286,15 @@ if [ ! -f /etc/bazzite/fixups/hhd_service_cleanup ]; then
     systemctl disable --now "$service" || true
   done
   touch /etc/bazzite/fixups/hhd_service_cleanup
+fi
+
+# Update Nvidia package for Flatpak if there's a mismatch
+if [[ "$SYSTEM_NVIDIA_VERSION" != "$FLATPAK_NVIDIA_VERSION" && \
+    $IMAGE_NAME =~ "nvidia" ]]; then
+  echo "Installing Nvidia Flatpak runtime"
+  flatpak install -y org.freedesktop.Platform.GL.nvidia-$SYSTEM_NVIDIA_VERSION org.freedesktop.Platform.GL32.nvidia-$SYSTEM_NVIDIA_VERSION
+else
+  echo "No Flatpak runtime changes needed"
 fi
 
 if [[ -n "$NEEDED_KARGS" ]]; then
