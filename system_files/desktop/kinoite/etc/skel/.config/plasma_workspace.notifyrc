@@ -1,0 +1,8 @@
+# Enable login/out sound by setting Action=Sound
+# For disabling, set Action= (empty)
+
+[Event/exitkde]
+Action=
+
+[Event/startkde]
+Action=
