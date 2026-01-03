@@ -53,6 +53,7 @@ INSTALL_FEDORA_PACKAGES=(
     cockpit-selinux
     cockpit-storaged
     cockpit-system
+    containerd
     dbus-x11
     edk2-ovmf
     flatpak-builder
