@@ -32,9 +32,11 @@ install-coolercontrol:
     #!/usr/bin/env bash
     set -eo pipefail
 
-    echo '{{ YELLOW }}This recipe will proceed to {{ BOLD }}layer{{ NORMAL }} {{ YELLOW }}CoolerControl{{ NORMAL }}.'
-    echo '{{ YELLOW }}If updates start to fail, please use "{{ BOLD }}rpm-ostree reset{{ NORMAL }}"'
-    echo '{{ YELLOW }}See https://docs.bazzite.gg/Installing_and_Managing_Software/rpm-ostree/#major-caveats-using-rpm-ostree{{ NORMAL }}'
+    cat <<'EOF'
+    {{ YELLOW }}This recipe will proceed to {{ BOLD }}layer{{ NORMAL }} {{ YELLOW }}CoolerControl{{ NORMAL }}.
+    {{ YELLOW }}If updates start to fail, please use "{{ BOLD }}rpm-ostree reset{{ NORMAL }}"
+    {{ YELLOW }}See https://docs.bazzite.gg/Installing_and_Managing_Software/rpm-ostree/#major-caveats-using-rpm-ostree{{ NORMAL }}
+    EOF
 
     layered() {
         local pkg="$1"
@@ -56,6 +58,48 @@ install-coolercontrol:
             echo 'Terra Repository is already enabled, skipping.'
         else
             echo 'Enabling Terra Repository.'
+            sudo sed -i 's@enabled=0@enabled=1@g' "$repo_path"
+        fi
+
+        echo "Installing: ${packages[*]}"
+        rpm-ostree install -y "${packages[@]}"
+        echo 'Complete, please reboot to apply changes.'
+    else
+        echo "No changes were made."
+    fi
+
+# Install Displaylink, Needed for some laptop docks to output video
+[group("apps")]
+install-displaylink:
+    #!/usr/bin/env bash
+    set -eo pipefail
+
+    cat <<'EOF'
+    {{ YELLOW }}This recipe will proceed to {{ BOLD }}layer{{ NORMAL }} {{ YELLOW }}Displaylink{{ NORMAL }}.
+    {{ YELLOW }}If updates start to fail, please use "{{ BOLD }}rpm-ostree reset{{ NORMAL }}"
+    {{ YELLOW }}See https://docs.bazzite.gg/Installing_and_Managing_Software/rpm-ostree/#major-caveats-using-rpm-ostree{{ NORMAL }}
+    EOF
+
+    layered() {
+        local pkg="$1"
+        rpm-ostree status --json | jq -e ".deployments[] | select(.booted == true) | .packages | index(\"$pkg\")" > /dev/null
+    }
+    packages=()
+    for pkg in displaylink; do
+        if layered "$pkg"; then
+            echo "$pkg is already layered, skipping."
+        else
+            packages+=("$pkg")
+        fi
+    done
+
+    if [ ${#packages[@]} -gt 0 ]; then
+        repo_path="/etc/yum.repos.d/negativo17-fedora-multimedia.repo"
+
+        if ( ! grep -q "enabled=0" "$repo_path" ); then  # if not matches found
+            echo 'Negativo17 Multimedia Repository is already enabled, skipping.'
+        else
+            echo 'Enabling Negativo17 Multimedia Repository.'
             sudo sed -i 's@enabled=0@enabled=1@g' "$repo_path"
         fi
 
@@ -173,13 +217,6 @@ install-resilio-sync: distrobox-check-fedora
     wget https://raw.githubusercontent.com/ublue-os/bazzite/main/post_install_files/resilio_sync/fedora-resilio-sync.service -O ~/.config/systemd/user/fedora-resilio-sync.service && \
     systemctl --user daemon-reload && \
     systemctl enable --user --now fedora-resilio-sync.service
-
-# Install scrcpy, a utility that mirrors Android devices (video and audio) connected via USB or over TCP/IP
-[group("apps")]
-install-scrcpy: distrobox-check-fedora
-    distrobox enter -n fedora -- bash -c 'sudo dnf copr enable -y zeno/scrcpy && \
-      sudo dnf install -y scrcpy && \
-      distrobox-export --app scrcpy'
 
 # Install OpenTabletDriver, an open source, cross-platform, user-mode tablet driver
 [group("hardware")]

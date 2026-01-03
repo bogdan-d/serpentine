@@ -166,31 +166,33 @@ toggle-wol ACTION="":
 toggle-iwd:
     #!/usr/bin/bash
     # Explain the purpose of the script
-    echo -e "This script manages enabling or disabling iwd as a replacement for wpa_supplicant for Wi-Fi networking."
+    echo -e "This script manages enabling or disabling iwd as a replacement for wpa_supplicant for Wi-Fi networking. Default is Enabled."
     echo -e "Enabling this can improve throughput, mesh networking, and reduce latency increases when scanning for networks"
-    echo -e "Disabling this can improve corporate or eduroam network compatibility"
+    echo -e "Disabling this can improve functionality on some wifi adapters"
     echo -e ""
     echo -e "WARNING: Changing this will remove all saved wifi networks"
     get_current_status() {
-      if [[ -f "/etc/NetworkManager/conf.d/iwd.conf" ]]; then
-        echo "Enabled"
-      else
+      if [[ -f "/etc/NetworkManager/conf.d/supplicant.conf" ]]; then
         echo "Disabled"
+      else
+        echo "Enabled"
       fi
     }
     remove_saved_networks() {
       nmcli -t -f NAME connection show | while read -r line; do sudo nmcli connection delete "$line"; done
     }
     enable_iwd() {
-      sudo mkdir -p "/etc/NetworkManager/conf.d/"
-      sudo rm -f "/etc/NetworkManager/conf.d/iwd.conf"
-      printf "[device]\nwifi.backend=iwd" | sudo tee /etc/NetworkManager/conf.d/iwd.conf > /dev/null
+      sudo rm -f "/etc/NetworkManager/conf.d/supplicant.conf"
       sudo systemctl mask wpa_supplicant.service
+      sudo systemctl unmask iwd.service
       remove_saved_networks
       echo -e "iwd enabled. Reboot required to apply changes."
     }
     disable_iwd() {
-      sudo rm -f "/etc/NetworkManager/conf.d/iwd.conf"
+      sudo mkdir -p "/etc/NetworkManager/conf.d/"
+      sudo rm -f "/etc/NetworkManager/conf.d/supplicant.conf"
+      printf "[device]\nwifi.backend=wpa_supplicant" | sudo tee /etc/NetworkManager/conf.d/supplicant.conf > /dev/null
+      sudo systemctl mask iwd.service
       sudo systemctl unmask wpa_supplicant.service
       remove_saved_networks
       echo -e "iwd disabled. Reboot required to apply changes."
@@ -438,4 +440,70 @@ steam-icons ACTION="":
       *)
       echo "Invalid choice. Exiting without changes."
       ;;
+    esac
+
+# Toggle CEC_ONSLEEP_STANDBY - Controls whether TV goes to standby when system sleeps
+toggle-cec-sleep ACTION="":
+    #!/usr/bin/bash
+    source /usr/lib/ujust/ujust.sh
+    CONFIG_FILE="/etc/default/cec-control"
+
+    # Check if config file exists
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+      echo -e "${red}${bold}Error:${normal} CEC config file not found at $CONFIG_FILE"
+      echo "CEC control may not be installed or configured on this system."
+      exit 1
+    fi
+
+    # Determine current state (default to false if not set)
+    if grep -q '^CEC_ONSLEEP_STANDBY=' "$CONFIG_FILE" 2>/dev/null; then
+      CURRENT_VALUE=$(grep '^CEC_ONSLEEP_STANDBY=' "$CONFIG_FILE" | cut -d= -f2)
+    else
+      CURRENT_VALUE="false"
+    fi
+
+    CURRENT_STATE="Disabled"
+    if [[ "$CURRENT_VALUE" == "true" ]]; then
+      CURRENT_STATE="Enabled"
+    fi
+
+    OPTION="{{ ACTION }}"
+
+    if [ "$OPTION" == "help" ]; then
+      echo "Usage: ujust toggle-cec-onsleep <option>"
+      echo "  <option>: Specify the option to skip the interactive prompt"
+      echo "  Use 'enable' to make TV standby when system sleeps"
+      echo "  Use 'disable' to prevent TV standby when system sleeps"
+      exit 0
+    elif [ -z "$OPTION" ]; then
+      echo -e "${bold}CEC On-Sleep Standby:${normal} $CURRENT_STATE"
+      echo ""
+      echo "When enabled, your TV will go to standby when the system sleeps."
+      echo "When disabled, your TV will remain on when the system sleeps."
+      echo ""
+      OPTION=$(ugum choose "Enable" "Disable" "Exit without saving")
+    fi
+
+    case "$OPTION" in
+      Enable|enable)
+        echo "Enabling CEC on-sleep standby..."
+        if grep -q '^CEC_ONSLEEP_STANDBY=' "$CONFIG_FILE"; then
+          sudo sed -i 's/^CEC_ONSLEEP_STANDBY=.*/CEC_ONSLEEP_STANDBY=true/' "$CONFIG_FILE"
+        else
+          echo 'CEC_ONSLEEP_STANDBY=true' | sudo tee -a "$CONFIG_FILE" > /dev/null
+        fi
+        echo -e "CEC on-sleep standby is now ${green}${bold}Enabled${normal}."
+        ;;
+      Disable|disable)
+        echo "Disabling CEC on-sleep standby..."
+        if grep -q '^CEC_ONSLEEP_STANDBY=' "$CONFIG_FILE"; then
+          sudo sed -i 's/^CEC_ONSLEEP_STANDBY=.*/CEC_ONSLEEP_STANDBY=false/' "$CONFIG_FILE"
+        else
+          echo 'CEC_ONSLEEP_STANDBY=false' | sudo tee -a "$CONFIG_FILE" > /dev/null
+        fi
+        echo -e "CEC on-sleep standby is now ${red}${bold}Disabled${normal}."
+        ;;
+      "Exit without saving"|*)
+        echo "No changes made."
+        ;;
     esac

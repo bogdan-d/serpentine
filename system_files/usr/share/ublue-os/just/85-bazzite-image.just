@@ -1,10 +1,5 @@
 # vim: set ft=make :
 
-# Enable BTRFS deduplication
-enable-deduplication:
-    systemctl enable btrfs-dedup@var-home.timer
-    systemctl enable btrfs-dedup@run-media-mmcblk0p1.timer
-
 # runs ryzenadj --max-performance on AC power change
 enable-ryzenadj-max-performance:
     #/bin/bash
@@ -26,7 +21,7 @@ enable-ryzenadj-max-performance:
     EOF
     sudo systemctl daemon-reload
     sudo systemctl enable max-perf-boot.service
-    echo 'installation complete. Reboot to take effect'
+    echo 'Installation complete. Reboot to take effect'
 
 # disables ryzenadj --max-performance on AC power
 disable-ryzenadj-max-performance:

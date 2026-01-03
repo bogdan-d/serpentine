@@ -8,7 +8,7 @@ IMAGE_BRANCH=$(jq -r '."image-branch"' < $IMAGE_INFO)
 FEDORA_VERSION=$(jq -r '."fedora-version"' < $IMAGE_INFO)
 
 # SCRIPT VERSION
-HWS_VER=65
+HWS_VER=68
 HWS_VER_FILE="/etc/bazzite/hws_version"
 HWS_VER_RAN=$(cat $HWS_VER_FILE)
 
@@ -51,8 +51,8 @@ mkdir -p /etc/bazzite/fixups
 # KERNEL ARGUMENTS
 echo "Current kargs: $KARGS"
 
-if /usr/libexec/hwsupport/valve-hardware; then
-  echo "Checking for needed karg changes (Jupiter/Galileo)"
+if /usr/libexec/hwsupport/valve-hardware || [[ ":83N0:83N1:83E1:ROG Ally RC71L:ROG Ally X RC72LA:" =~ ":$SYS_ID:" ]]; then
+  echo "Checking for needed IOMMU change."
 
   if [[ ! $KARGS =~ "amd_iommu" ]]; then
     NEEDED_KARGS+=("--append-if-missing=amd_iommu=off")
@@ -187,6 +187,16 @@ if ((MINIMUM_FREE_ZRAM > CURRENT_FREE_ZRAM)); then
     echo "Found needed minimum-free ZRAM changes, applying the following: ${MINIMUM_FREE_ZRAM}"
 else
   echo "No minimum-free ZRAM changes needed"
+fi
+
+# IWD Fixup
+if [ ! -f /etc/bazzite/fixups/iwd ]; then
+  if [[ ! -f "/etc/NetworkManager/conf.d/iwd.conf" ]]; then
+    # If the user isn't already using IWD, remove their networks so they can be recreated properly.
+    nmcli -t -f UUID,TYPE connection show | awk -F: '$2=="802-11-wireless"{print $1}' | xargs -r nmcli connection delete
+  fi
+
+  touch /etc/bazzite/fixups/iwd
 fi
 
 # FRAMEWORK AMD FIXES
