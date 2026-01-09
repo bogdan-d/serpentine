@@ -8,8 +8,8 @@ case "$-" in
 *) return 0 ;;
 esac
 
-# If starship is not available, do nothing
-if ! command -v starship >/dev/null 2>&1; then
+# If starship is not available or enhancements are disabled, do nothing
+if [ -n "${shell_disable_enhancements-}" ] || ! command -v starship >/dev/null 2>&1; then
     return 0
 fi
 
