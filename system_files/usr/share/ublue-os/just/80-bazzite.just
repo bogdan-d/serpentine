@@ -1,5 +1,11 @@
 # vim: set ft=make :
 
+# Disable NTFS/exFAT monitor and notification service
+_disable-ntfs-service:
+    #!/usr/bin/bash
+    systemctl disable --now --user ntfs-nag.service
+    systemctl mask --now --user ntfs-nag.service
+
 # Install System Flatpaks (Support for Rebasing)
 [group("system")]
 install-system-flatpaks:
@@ -101,7 +107,11 @@ configure-grub ACTION="":
     # Function to get the current GRUB menu_auto_hide setting and explain it
     get_current_setting() {
       local CURRENT_SETTING
-      CURRENT_SETTING=$(sudo grub2-editenv - list | grep menu_auto_hide | cut -d= -f2)
+      if sudo grub2-editenv - list | grep -q '^menu_auto_hide='; then
+        CURRENT_SETTING=$(sudo grub2-editenv - list | awk -F= '/menu_auto_hide/ {print $2}')
+      else
+        CURRENT_SETTING=""
+      fi
       if [ -z "$CURRENT_SETTING" ]; then
         echo "Current GRUB menu_auto_hide setting: ${bold}${red}Not Set (default to 0)${normal}"
         echo "Explanation:"

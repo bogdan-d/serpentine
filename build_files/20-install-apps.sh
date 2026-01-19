@@ -57,6 +57,9 @@ INSTALL_FEDORA_PACKAGES=(
     dbus-x11
     edk2-ovmf
     flatpak-builder
+    # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
+    gvfs
+    gvfs-fuse
     # incus
     # incus-agent
     iotop
