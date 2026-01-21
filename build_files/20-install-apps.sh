@@ -57,6 +57,7 @@ INSTALL_FEDORA_PACKAGES=(
     dbus-x11
     edk2-ovmf
     flatpak-builder
+    git-subtree
     # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
     gvfs
     gvfs-fuse
@@ -97,6 +98,8 @@ INSTALL_FEDORA_PACKAGES=(
     sysprof
     tiptop
     trace-cmd
+    udev-hid-bpf
+    udev-hid-bpf-stable
     udica
     usbmuxd
     # virt-manager - we will use the flatpak version
