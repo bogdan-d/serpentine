@@ -3,7 +3,7 @@
 # SCRIPT VERSION
 GROUP_SETUP_VER=2
 GROUP_SETUP_VER_FILE="/etc/serpentine/dx-groups"
-GROUP_SETUP_VER_RAN=$(cat "$GROUP_SETUP_VER_FILE")
+GROUP_SETUP_VER_RAN=$(cat "$GROUP_SETUP_VER_FILE" 2>/dev/null || echo "0")
 
 # make the directory if it doesn't exist
 mkdir -p /etc/serpentine
@@ -27,6 +27,7 @@ append_group() {
 append_group docker
 # append_group incus-admin
 append_group libvirt
+append_group dialout
 
 ## Read wheel group members into an array safely to avoid word-splitting warnings
 mapfile -t wheelarray < <(getent group wheel | cut -d ":" -f 4 | tr ',' '\n' | sed '/^$/d')
@@ -34,6 +35,10 @@ for user in "${wheelarray[@]}"; do
   usermod -aG docker "$user"
   # usermod -aG incus-admin "$user"
   usermod -aG libvirt "$user"
+  usermod -aG dialout "$user"
+  # For working with the GPU
+  usermod -aG render "$user"
+  usermod -aG video "$user"
 done
 
 # Prevent future executions

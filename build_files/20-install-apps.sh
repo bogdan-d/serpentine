@@ -45,15 +45,22 @@ INSTALL_FEDORA_PACKAGES=(
     bpftop
     bpftrace
     ccache
+    cockpit
     cockpit-bridge
+    cockpit-files
     cockpit-machines
     cockpit-networkmanager
     cockpit-ostree
     cockpit-podman
     cockpit-selinux
+    cockpit-sosreport
     cockpit-storaged
     cockpit-system
     containerd
+    # already in base image
+    cpupower
+    # required to fix APU power management on AMD systems
+    corectl
     dbus-x11
     edk2-ovmf
     flatpak-builder
@@ -94,6 +101,7 @@ INSTALL_FEDORA_PACKAGES=(
     rclone
     rocm-hip
     rocm-opencl
+    rocm-runtime
     rocm-smi
     sysprof
     tiptop
@@ -103,6 +111,7 @@ INSTALL_FEDORA_PACKAGES=(
     udica
     usbmuxd
     # virt-manager - we will use the flatpak version
+    virt-install
     virt-v2v
     virt-viewer
     ydotool
