@@ -2,7 +2,7 @@
 
 source /usr/lib/ublue/setup-services/libsetup.sh
 
-version-script dx-usergroups privileged 2 || exit 0
+version-script dx-usergroups privileged 3 || exit 0
 
 # Function to append a group entry to /etc/group
 append_group() {
@@ -15,6 +15,8 @@ append_group() {
 
 # Setup Groups
 append_group docker
+append_group render
+append_group video
 
 # We don't have incus on the image yet
 # append_group incus-admin

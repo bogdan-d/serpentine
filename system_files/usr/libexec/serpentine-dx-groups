@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # SCRIPT VERSION
-GROUP_SETUP_VER=3
+GROUP_SETUP_VER=4
 GROUP_SETUP_VER_FILE="/etc/serpentine/dx-groups"
 GROUP_SETUP_VER_RAN=$(cat "$GROUP_SETUP_VER_FILE" 2>/dev/null || echo "0")
 
@@ -28,6 +28,8 @@ append_group docker
 # append_group incus-admin
 append_group libvirt
 append_group dialout
+append_group render
+append_group video
 
 ## Read wheel group members into an array safely to avoid word-splitting warnings
 mapfile -t wheelarray < <(getent group wheel | cut -d ":" -f 4 | tr ',' '\n' | sed '/^$/d')
