@@ -60,7 +60,7 @@ INSTALL_FEDORA_PACKAGES=(
     # already in base image
     cpupower
     # required to fix APU power management on AMD systems
-    corectl
+    corectrl
     dbus-x11
     edk2-ovmf
     flatpak-builder
