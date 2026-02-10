@@ -29,14 +29,6 @@ tee /etc/modules-load.d/ip_tables.conf <<EOF
 iptable_nat
 EOF
 
-# Packages to remove from the base image that we don't want
-REMOVE_FEDORA_PACKAGES=(
-    kate
-    kate-krunner-plugin
-    kate-libs
-    kate-plugins
-)
-
 # Packages installed as a group. Keep this list alphabetized where practical
 # to make diffs smaller when adding/removing packages.
 INSTALL_FEDORA_PACKAGES=(
@@ -99,10 +91,6 @@ INSTALL_FEDORA_PACKAGES=(
     qemu-user-static
     restic
     rclone
-    rocm-hip
-    rocm-opencl
-    rocm-runtime
-    rocm-smi
     sysprof
     tiptop
     trace-cmd
@@ -116,6 +104,43 @@ INSTALL_FEDORA_PACKAGES=(
     virt-viewer
     ydotool
 )
+
+# Packages to remove from the base image that we don't want
+REMOVE_FEDORA_PACKAGES=(
+    kate
+    kate-krunner-plugin
+    kate-libs
+    kate-plugins
+)
+
+# ROCM doesn't work well on nvidia
+INSTALL_AMD_ONLY_PACKAGES=(
+    rocm-hip 
+    rocm-opencl
+    rocm-runtime
+    rocm-smi
+)
+
+INSTALL_NVIDIA_ONLY_PACKAGES=(
+)
+
+
+# Install AMD GPU related packages if not nvidia image
+if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
+    if [[ ${#INSTALL_AMD_ONLY_PACKAGES[@]} -gt 0 ]]; then
+        echo "Installing AMD GPU related packages..."
+        dnf5 install -y "${INSTALL_AMD_ONLY_PACKAGES[@]}"
+    else
+        echo "No AMD GPU related packages to install."
+    fi
+else
+    if [[ ${#INSTALL_NVIDIA_ONLY_PACKAGES[@]} -gt 0 ]]; then
+        echo "Installing NVIDIA GPU related packages..."
+        dnf5 install -y "${INSTALL_NVIDIA_ONLY_PACKAGES[@]}"
+    else
+        echo "No NVIDIA GPU related packages to install."
+    fi
+fi
 
 # Install the package group in one go
 echo "Installing ${#INSTALL_FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
