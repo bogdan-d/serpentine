@@ -167,6 +167,27 @@ DOCKER_PACKAGES=(
 )
 dnf5 -y install --enablerepo=docker-ce-stable "${DOCKER_PACKAGES[@]}"
 
+# Ensure Docker storage is No_COW on btrfs when possible.
+# This is best-effort during image build because the real target filesystem
+# exists only on the installed system at first boot.
+DOCKER_DATA_ROOT="/var/lib/docker"
+mkdir -p "${DOCKER_DATA_ROOT}"
+
+if command -v chattr >/dev/null && command -v lsattr >/dev/null; then
+    if [[ "$(stat -f -c %T "${DOCKER_DATA_ROOT}")" == "btrfs" ]]; then
+        if ! lsattr -d "${DOCKER_DATA_ROOT}" | grep -q 'C'; then
+            echo "Applying No_COW (+C) to ${DOCKER_DATA_ROOT} on btrfs..."
+            chattr +C "${DOCKER_DATA_ROOT}"
+        else
+            echo "No_COW already set on ${DOCKER_DATA_ROOT}."
+        fi
+    else
+        echo "Skipping No_COW setup in build context: ${DOCKER_DATA_ROOT} is not on btrfs."
+    fi
+else
+    echo "Skipping No_COW setup in build context: chattr/lsattr not available."
+fi
+
 # Install COPR packages with isolated repo enablement
 echo "Installing DX COPR packages with isolated repo enablement..."
 copr_install_isolated "karmab/kcli" "kcli"
