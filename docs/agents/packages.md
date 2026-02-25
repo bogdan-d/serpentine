@@ -1,25 +1,13 @@
-# Packages & Stack
+# Packages
 
-## Custom Packages
+## Managers by Scope
 
-- **bazzite-kernel**: Custom Linux kernel
-- **steamdeck-kde-presets**: KDE theming
-- **gamescope-session-plus**: Enhanced gamescope
-- **hhd**: Handheld input daemon
+- **DNF5**: system RPMs
+- **Flatpak**: user applications
+- **Homebrew**: extra CLI/tools/fonts
 
-## Gaming Stack
+## Package Change Rules
 
-- **Steam**: Pre-installed with custom launcher scripts
-- **Gamescope**: Compositor for gaming mode
-- **MangoHud**: Performance overlay
-- **vkBasalt**: Post-processing layer
-- **LatencyFleX**: Frame pacing
-- **Wine/Proton**: Compatibility layers
-
-## Hardware Support
-
-- **AMD**: Full ROCm/HIP support, Southern Islands GPUs
-- **NVIDIA**: Proprietary drivers (NVIDIA variants)
-- **Controllers**: xone (Xbox), extensive handheld support
-- **Display**: DisplayLink, HDR, variable refresh rate
-- **Audio**: PipeWire with custom configurations
+- Prefer upstream Fedora or ublue sources before adding new third-party repos.
+- Keep package install/remove arrays in `build_files/20-install-apps.sh` organized and readable.
+- Keep optional repos disabled by default; enable only for the install command that needs them.
