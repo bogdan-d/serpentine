@@ -147,7 +147,7 @@ configure-grub ACTION="":
       local options=(
         "Hide After Successful Boot (menu_auto_hide=2)"
         "Same except when Dual Booting (menu_auto_hide=1)"
-        "Always Show Grub (menu_auto_hide=0)"
+        "Always Show Grub (unset menu_auto_hide)"
         "Exit without changes"
       )
       local choice
@@ -168,8 +168,8 @@ configure-grub ACTION="":
           sudo grub2-editenv - set menu_auto_hide=1
           echo "GRUB menu is now set to ${bold}${yellow}Hide After Successful Boot except when Dual Booting${normal}."
           ;;
-        *"(menu_auto_hide=0)"*|show)
-          sudo grub2-editenv - set menu_auto_hide=0
+        *"(unset menu_auto_hide)"*|show)
+          sudo grub2-editenv - unset menu_auto_hide
           echo "GRUB menu is now set to ${bold}${green}Always Show${normal}."
           ;;
         *"exit without changes"*|exit)
@@ -202,6 +202,65 @@ configure-grub ACTION="":
     else
       apply_setting "$OPTION"
     fi
+
+# Toogle a ramoops config to save panic messages across crashes
+[group("system")]
+toggle-save-panics ACTION="":
+    #!/usr/bin/bash
+    source /usr/lib/ujust/ujust.sh
+
+    if [[ -e /etc/modules-load.d/ramoops.conf ]]; then
+        STATUS=Enabled
+    else
+        STATUS=Disabled
+    fi
+
+    OPTION="{{ ACTION }}"
+    if [ "$OPTION" == "help" ]; then
+      echo "Usage: ujust toggle-save-panics <option>"
+      echo "  <option>: Specify the option to skip the interactive prompt"
+      echo "  Use 'enable' to enable ramoops"
+      echo "  Use 'disable' to disable ramoops"
+      exit 0
+    elif [ "$OPTION" == "" ]; then
+      echo Ramoops is a kernel module that will save panic information across a reboot and allow it to be
+      echo recovered for debugging.  Panic messages will be written to /var/lib/systemd/pstore.
+      echo
+      if [ "$STATUS" == "Enabled" ]; then
+        echo -e "${bold}ramoops configuration:${normal} ${green}$STATUS${normal}\n"
+      else
+        echo -e "${bold}ramoops configuration:${normal} ${yellow}$STATUS${normal}\n"
+      fi
+
+      OPTION=$(ugum choose "Enable ramoops" "Disable ramoops" "Exit without saving")
+    fi
+
+    case "$OPTION" in
+      "Enable ramoops"|enable)
+        echo "Enabling ramoops..."
+        echo
+        echo "kernel.panic = 5" | sudo tee /etc/sysctl.d/99-panic.conf > /dev/null
+        echo "options ramoops mem_name=ramoops mem_size=0x10000 record_size=0x4000" | \
+          sudo tee /etc/modprobe.d/ramoops.conf > /dev/null
+        echo "ramoops" | sudo tee /etc/modules-load.d/ramoops.conf > /dev/null
+        sudo rpm-ostree kargs \
+          --append-if-missing="reserve_mem=64K:4096:ramoops" \
+          --append-if-missing="pstore.backend=ramoops"
+        ;;
+      "Disable ramoops"|disable)
+        echo "Disabling ramoops..."
+        echo
+        sudo rm -f /etc/sysctl.d/99-panic.conf
+        sudo rm -f /etc/modprobe.d/ramoops.conf
+        sudo rm -f /etc/modules-load.d/ramoops.conf
+        sudo rpm-ostree kargs \
+          --delete-if-present="reserve_mem=64K:4096:ramoops" \
+          --delete-if-present="pstore.backend=ramoops"
+        ;;
+      "Exit without saving"|*)
+        echo "No changes made."
+        ;;
+    esac
 
 # Add user to "input" group required by certain controller drivers
 [group("hardware")]
