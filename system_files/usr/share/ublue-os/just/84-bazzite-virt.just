@@ -68,6 +68,7 @@ setup-virtualization ACTION="":
             echo "Adding libvirt qemu hooks"
             sudo wget 'https://raw.githubusercontent.com/PassthroughPOST/VFIO-Tools/master/libvirt_hooks/qemu' -O /etc/libvirt/hooks/qemu
             sudo chmod +x /etc/libvirt/hooks/qemu
+            sudo restorecon -r /etc/libvirt/hooks
             sudo grep -A1 -B1 "# Add" /etc/libvirt/hooks/qemu | sed 's/^# //g'
             if sudo test ! -d "/etc/libvirt/hooks/qemu.d"; then
               sudo mkdir /etc/libvirt/hooks/qemu.d
@@ -107,7 +108,7 @@ setup-virtualization ACTION="":
         if [[ ${CPU_VENDOR} == "AuthenticAMD" ]]; then
           VENDOR_KARG="amd_iommu=on"
         elif [[ ${CPU_VENDOR} == "GenuineIntel" ]]; then
-          VENDOR_KARG="intel_iommu=on"  
+          VENDOR_KARG="intel_iommu=on"
         fi
         if [[ ${VENDOR_KARG} == "unset" ]]; then
           echo "Failed to get CPU vendor, exiting..."
