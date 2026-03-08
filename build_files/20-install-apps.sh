@@ -14,7 +14,7 @@ set -xeuo pipefail
 #     code
 
 # Load secure COPR helpers
-# shellcheck source=scripts/copr-helpers.sh
+# shellcheck source=build_files/scripts/copr-helpers.sh
 source /run/context/build_files/scripts/copr-helpers.sh
 
 # Apply IP Forwarding before installing Docker to prevent messing with LXC networking

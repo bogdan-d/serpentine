@@ -1,4 +1,4 @@
-ARG BASE_IMAGE
+ARG BASE_IMAGE=ghcr.io/ublue-os/bazzite:latest
 # Allow build scripts to be referenced without being copied into the final image
 FROM scratch AS ctx
 
@@ -9,6 +9,7 @@ COPY build_files /build_files
 # FROM ghcr.io/ublue-os/bazzite:stable
 FROM ${BASE_IMAGE}
 
+ARG BASE_IMAGE
 ARG IMAGE_NAME="${IMAGE_NAME:-serpentine}"
 ARG IMAGE_VENDOR="${IMAGE_VENDOR:-bogdan-d}"
 

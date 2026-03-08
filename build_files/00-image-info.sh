@@ -5,6 +5,16 @@ set -eoux pipefail
 IMAGE_PRETTY_NAME="Serpentine"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_REF="ostree-image-signed:docker://ghcr.io/$IMAGE_VENDOR/$IMAGE_NAME"
+BASE_IMAGE_NAME="$({ jq -r '."base-image-name" // empty' "$IMAGE_INFO" 2>/dev/null || true; } | head -n 1)"
+
+if [[ -z "$BASE_IMAGE_NAME" && -n "${BASE_IMAGE:-}" ]]; then
+    BASE_IMAGE_NAME="${BASE_IMAGE##*/}"
+    BASE_IMAGE_NAME="${BASE_IMAGE_NAME%%:*}"
+fi
+
+if [[ -z "$BASE_IMAGE_NAME" ]]; then
+    BASE_IMAGE_NAME="$IMAGE_NAME"
+fi
 
 # image-info File
 sed -i 's/"image-name": [^,]*/"image-name": "'"$IMAGE_NAME"'"/' $IMAGE_INFO
