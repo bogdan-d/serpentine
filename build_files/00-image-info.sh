@@ -26,3 +26,8 @@ if [[ "$IMAGE_NAME" != *gnome* ]]; then
         sed -i "s/^Variant=.*/Variant=Developer Experience (NVIDIA)/" /etc/xdg/kcm-about-distrorc
     fi
 fi
+
+FEDORA_VERSION=$(rpm -E %fedora)
+
+# Rebrand system-release so that grub2-mkconfig uses "Serpentine" as the distributor
+echo "$IMAGE_PRETTY_NAME release $FEDORA_VERSION (${BASE_IMAGE_NAME^})" > /etc/system-release
