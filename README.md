@@ -117,24 +117,24 @@ If you want to customize this image or build it yourself, you can use the provid
 
 2.  **Build the container image:**
     ```bash
-    just build bazzite-deck kinoite
+    just build bazzite kinoite
     ```
 
     For NVIDIA variant:
     ```bash
-    just build bazzite-deck-nvidia kinoite
+    just build bazzite-nvidia kinoite
     ```
 
 3.  **(Optional) Build a bootable ISO:**
     You can create an ISO for installation.
     ```bash
-    just build-iso bazzite-deck kinoite
+    just build-iso bazzite kinoite
     ```
     The generated images will be in the root directory.
 
 4.  **Test the image:**
     ```bash
-    just run bazzite-deck kinoite
+    just run bazzite kinoite
     ```
 
 ### Build System Overview

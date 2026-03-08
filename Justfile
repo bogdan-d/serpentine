@@ -3,7 +3,7 @@ export image_name := env("IMAGE_NAME", "serpentine")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 export source_org := env("SOURCE_ORG", "ublue-os")
-export source_image := env("SOURCE_IMAGE", "bazzite-deck")
+export source_image := env("SOURCE_IMAGE", "bazzite")
 export source_tag := env("SOURCE_TAG", "latest")
 
 alias build-vm := build-qcow2
@@ -77,7 +77,7 @@ sudoif command *args:
 # Arguments:
 #   $target_image - The tag you want to apply to the image (default: $image_name).
 #   $tag - The tag for the image (default: $default_tag).
-#   $base_image - The base image to build from (default: bazzite-deck).
+#   $base_image - The base image to build from (default: bazzite).
 #
 # The script constructs the version string using the tag and the current date.
 # If the git working directory is clean, it also includes the short SHA of the current HEAD.
@@ -85,9 +85,9 @@ sudoif command *args:
 # just build $target_image $tag $base_image
 #
 # Example usage:
-#   just build serpentine latest bazzite-deck-nvidia
+#   just build serpentine latest bazzite-nvidia
 #
-# This will build an image 'serpentine:latest' based on bazzite-deck-nvidia.
+# This will build an image 'serpentine:latest' based on bazzite-nvidia.
 #
 
 # Build the image using the specified parameters

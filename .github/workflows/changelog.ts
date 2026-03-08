@@ -107,7 +107,7 @@ const IMAGES = [
 ];
 
 /** Upstream (base) image used to build Serpentine */
-const UPSTREAM_IMAGE = "ublue-os/bazzite-deck";
+const UPSTREAM_IMAGE = "ublue-os/bazzite";
 
 /** Container registry URL for upstream */
 const UPSTREAM_REGISTRY = "docker://ghcr.io/";
@@ -398,7 +398,7 @@ async function inspectImage(ref: string): Promise<Manifest | null> {
 /**
  * Fetches upstream (base) image manifests for a specific target/tag
  *
- * Retrieves the manifest for the upstream base image (bazzite-deck) that Serpentine
+ * Retrieves the manifest for the upstream base image (bazzite) that Serpentine
  * is built on top of. Returns a single-entry mapping to maintain compatibility with
  * helper functions that expect Record<string, Manifest> format.
  *
@@ -408,7 +408,7 @@ async function inspectImage(ref: string): Promise<Manifest | null> {
  *
  * @example
  * const upstream = await getUpstreamManifests('stable');
- * // Returns: { 'ublue-os/bazzite-deck': {...} }
+ * // Returns: { 'ublue-os/bazzite': {...} }
  */
 async function getUpstreamManifests(target: string): Promise<Record<string, Manifest>> {
   const out: Record<string, Manifest> = {};

@@ -16,7 +16,7 @@ IMAGES = [
 ]
 
 # Upstream (base) image used to build Serpentine
-UPSTREAM_IMAGE = "ublue-os/bazzite-deck"
+UPSTREAM_IMAGE = "ublue-os/bazzite"
 
 # Container registry URL for upstream
 UPSTREAM_REGISTRY = "docker://ghcr.io/"
