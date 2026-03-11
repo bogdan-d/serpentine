@@ -51,5 +51,4 @@ RUN --mount=type=bind,from=ctx,source=/,target=/run/context \
 ## See: https://github.com/bootc-dev/bootc/commit/d5c6515e237d7e8b9b1e385fbc393e8c517eafad
 RUN --network=none \
     --mount=type=tmpfs,dst=/run \
-    --mount=type=tmpfs,dst=/tmp \
     bootc container lint

@@ -17,17 +17,28 @@ set -xeuo pipefail
 # shellcheck source=build_files/scripts/copr-helpers.sh
 source /run/context/build_files/scripts/copr-helpers.sh
 
-# Apply IP Forwarding before installing Docker to prevent messing with LXC networking
+# Apply IP Forwarding before installing Docker to prevent messing with LXC networking (in the github runner docker builder instance)
 sysctl -p
 
-# Load iptable_nat module for docker-in-docker.
+# 1. Enable IP Forwarding persistently on boot to prevent Docker/LXC network races
+# ? Note: this is already enabled from someplace else, possibly from here: system_files/usr/lib/sysctl.d/docker-ce.conf
+# ? Refactor this logic and keep all docker related changes in one place (here is most logical, uncomment below)
+# echo "Configuring IPv4 forwarding..."
+# mkdir -p /usr/lib/sysctl.d
+# echo "net.ipv4.ip_forward = 1" > /usr/lib/sysctl.d/99-ip-forwarding.conf
+
+# 2. Load iptable_nat module on boot for Devcontainers / Docker-in-Docker
 # See:
 #   - https://github.com/ublue-os/bluefin/issues/2365
 #   - https://github.com/devcontainers/features/issues/1235
-mkdir -p /etc/modules-load.d
-tee /etc/modules-load.d/ip_tables.conf <<EOF
-iptable_nat
-EOF
+echo "Configuring iptable_nat module for DinD..."
+mkdir -p /usr/lib/modules-load.d
+echo "iptable_nat" > /usr/lib/modules-load.d/iptable_nat.conf
+
+# mkdir -p /etc/modules-load.d
+# tee /etc/modules-load.d/ip_tables.conf <<EOF
+# iptable_nat
+# EOF
 
 # Packages installed as a group. Keep this list alphabetized where practical
 # to make diffs smaller when adding/removing packages.
