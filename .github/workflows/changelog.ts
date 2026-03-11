@@ -103,7 +103,7 @@ const REGISTRY = `docker://ghcr.io/${AUTHOR}/`;
 
 const IMAGES = [
   IMAGE_BASE_NAME,
-  `${IMAGE_BASE_NAME}-nvidia`,
+  // `${IMAGE_BASE_NAME}-nvidia`,
 ];
 
 /** Upstream (base) image used to build Serpentine */
