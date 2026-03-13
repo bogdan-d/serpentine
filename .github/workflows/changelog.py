@@ -12,7 +12,7 @@ REGISTRY = f"docker://ghcr.io/{AUTHOR}/"
 
 IMAGES = [
     BASE_IMAGE_NAME,
-    f"{BASE_IMAGE_NAME}-nvidia",
+    # f"{BASE_IMAGE_NAME}-nvidia",
 ]
 
 # Upstream (base) image used to build Serpentine
