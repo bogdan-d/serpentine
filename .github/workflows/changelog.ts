@@ -14,6 +14,9 @@
 // TYPE DEFINITIONS AND INTERFACES
 // ============================================================================
 
+declare const process: any;
+declare const Bun: any;
+
 /**
  * Container manifest information from skopeo inspection
  */
@@ -59,6 +62,20 @@ interface PackageInfo {
  */
 interface ImagePackages {
   [imageName: string]: PackageInfo;
+}
+
+/** SBOM artifact from Syft scan */
+interface SbomArtifact {
+  name: string;
+  version: string;
+  type: string;
+  [key: string]: any;
+}
+
+/** SBOM document structure */
+interface SbomDocument {
+  artifacts?: SbomArtifact[];
+  [key: string]: any;
 }
 
 /**
@@ -124,6 +141,9 @@ const RETRY_WAIT = 5;
 /** Regex pattern to match Fedora version suffixes */
 const FEDORA_PATTERN = /\.fc\d\d/;
 
+/** Regex pattern to match epoch prefixes (e.g., "1:25.2.7-1" -> "25.2.7-1") */
+const EPOCH_PATTERN = /^\d+:/;
+
 /** Regex pattern to match stable version tags */
 const STABLE_START_PATTERN = /\d\d\.\d/;
 
@@ -176,7 +196,9 @@ const UPSTREAM_PAT = `---
 | **Mesa** | {pkgrel:mesa-filesystem} |
 | **Gamescope** | {pkgrel:gamescope} |
 | **KDE** | {pkgrel:plasma-desktop} |
-| **[HHD](https://github.com/hhd-dev/hhd)** | {pkgrel:hhd} |
+| **Podman** | {pkgrel:podman} |
+| **Nvidia** | {pkgrel:nvidia-driver} |
+| **ROCm** | {pkgrel:rocm-runtime} |
 
 ### Package changes (from upstream: ${UPSTREAM_IMAGE})
 | | Name | Previous | New |
@@ -206,7 +228,9 @@ From previous \`{target}\` version \`{prev}\` there have been the following chan
 | **Mesa** | {pkgrel:mesa-filesystem} |
 | **Gamescope** | {pkgrel:gamescope} |
 | **KDE** | {pkgrel:plasma-desktop} |
-| **[HHD](https://github.com/hhd-dev/hhd)** | {pkgrel:hhd} |
+| **Podman** | {pkgrel:podman} |
+| **Nvidia** | {pkgrel:nvidia-driver} |
+| **ROCm** | {pkgrel:rocm-runtime} |
 
 {changes}
 
@@ -230,11 +254,12 @@ const BLACKLIST_VERSIONS = [
   "gamescope",
   "plasma-desktop",
   "atheros-firmware",
+  "podman",
+  "nvidia-driver",
+  "rocm-runtime",
 ];
 
-const PKG_ALIAS = {
-  "hhd-git": "hhd",
-};
+const PKG_ALIAS: Record<string, string> = {};
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -348,28 +373,6 @@ function getTags(target: string, manifests: Record<string, Manifest>): [string, 
 }
 
 /**
- * Extracts package information from container manifests
- *
- * @param manifests - Mapping of image manifests
- * @returns Mapping of image names to their package information
- */
-function getPackages(manifests: Record<string, Manifest>): ImagePackages {
-  const packages: ImagePackages = {};
-
-  for (const [img, manifest] of Object.entries(manifests)) {
-    try {
-      if (manifest.Labels && manifest.Labels["dev.hhd.rechunk.info"]) {
-        packages[img] = JSON.parse(manifest.Labels["dev.hhd.rechunk.info"]).packages as PackageInfo;
-      }
-    } catch (error) {
-      console.log(`Failed to get packages for ${img}:\n${(error as Error).message}`);
-    }
-  }
-
-  return packages;
-}
-
-/**
  * Inspect a container image via skopeo and parse the manifest JSON
  */
 async function inspectImage(ref: string): Promise<Manifest | null> {
@@ -393,6 +396,152 @@ async function inspectImage(ref: string): Promise<Manifest | null> {
     console.log(`Failed to parse JSON for ${ref}: ${(error as Error).message}`);
     return null;
   }
+}
+
+// ============================================================================
+// SBOM-BASED PACKAGE EXTRACTION
+// ============================================================================
+
+/**
+ * Gets image digest via skopeo inspect
+ */
+async function getImageDigest(image: string, tag: string): Promise<string> {
+  const result = await Bun.$`skopeo inspect docker://${image}:${tag}`.text();
+  const manifest = JSON.parse(result);
+  return manifest.Digest as string;
+}
+
+/**
+ * Fetches SBOM using ORAS for the given image and digest
+ *
+ * Discovers SBOM referrers attached to the image, pulls the SBOM artifact,
+ * and handles both .zst (decompresses with zstd) and .json formats.
+ */
+async function getSbom(image: string, digest: string): Promise<SbomDocument> {
+  const fullRef = `${image}@${digest}`;
+
+  // Find the SBOM referrer attached to this image
+  const discovered = JSON.parse(
+    await Bun.$`oras discover --format json ${fullRef}`.text()
+  );
+
+  let sbomDigest: string | null = null;
+  for (const referrer of discovered.referrers || []) {
+    if ((referrer.artifactType || "").includes("spdx+json")) {
+      sbomDigest = referrer.digest;
+      break;
+    }
+  }
+
+  if (!sbomDigest) {
+    throw new Error(`No SBOM referrer found for ${fullRef}`);
+  }
+
+  const sbomRef = `${image}@${sbomDigest}`;
+  const tmpdir = (await Bun.$`mktemp -d`.text()).trim();
+
+  try {
+    await Bun.$`oras pull ${sbomRef}`.cwd(tmpdir).quiet();
+
+    // Look for pulled SBOM files
+    const files = (await Bun.$`ls ${tmpdir}`.text()).trim().split("\n");
+    for (const fname of files) {
+      const fpath = `${tmpdir}/${fname}`;
+      if (fname.endsWith(".zst")) {
+        const content = await Bun.$`zstd -d ${fpath} --stdout`.text();
+        return JSON.parse(content) as SbomDocument;
+      } else if (fname.endsWith(".json")) {
+        const content = await Bun.file(fpath).text();
+        return JSON.parse(content) as SbomDocument;
+      }
+    }
+
+    throw new Error(`No SBOM file found after pulling ${sbomRef}`);
+  } finally {
+    await Bun.$`rm -rf ${tmpdir}`.quiet();
+  }
+}
+
+/**
+ * Parse RPM packages from an SBOM document
+ *
+ * Filters artifacts where type === "rpm" and keeps the more specific version
+ * (the one with epoch) if a duplicate is encountered.
+ */
+function parseSbomPackages(sbom: SbomDocument): PackageInfo {
+  const packages: PackageInfo = {};
+
+  for (const artifact of sbom.artifacts || []) {
+    if (artifact.type !== "rpm") continue;
+
+    const name = artifact.name;
+    const version = artifact.version;
+    if (!name || !version) continue;
+
+    // If we see the same package, keep the one with epoch (more specific)
+    if (!(name in packages) || (version.includes(":") && !packages[name].includes(":"))) {
+      packages[name] = version;
+    }
+  }
+
+  return packages;
+}
+
+/**
+ * Gets packages for all Serpentine images via SBOM, with fallback to rechunker labels
+ */
+async function getPackagesFromSbom(target: string): Promise<ImagePackages> {
+  const packages: ImagePackages = {};
+  const imgs = Array.from(getImages());
+
+  for (let j = 0; j < imgs.length; j++) {
+    const { img } = imgs[j];
+    console.log(`Getting packages for ${img}:${target} via SBOM (${j + 1}/${imgs.length})`);
+    try {
+      const fullImage = `ghcr.io/${AUTHOR}/${img}`;
+      const digest = await getImageDigest(fullImage, target);
+      const sbom = await getSbom(fullImage, digest);
+      packages[img] = parseSbomPackages(sbom);
+      console.log(`  Found ${Object.keys(packages[img]).length} packages`);
+    } catch (error) {
+      console.log(`  SBOM failed for ${img}:${target}: ${(error as Error).message}`);
+      console.log(`  Falling back to rechunker labels...`);
+      // Fallback to rechunker labels
+      try {
+        const ref = `${REGISTRY}${img}:${target}`;
+        const manifest = await inspectImage(ref);
+        if (manifest?.Labels?.["dev.hhd.rechunk.info"]) {
+          packages[img] = JSON.parse(manifest.Labels["dev.hhd.rechunk.info"]).packages as PackageInfo;
+          console.log(`  Fallback: found ${Object.keys(packages[img]).length} packages from labels`);
+        }
+      } catch (fallbackError) {
+        console.log(`  Fallback also failed: ${(fallbackError as Error).message}`);
+      }
+    }
+  }
+
+  return packages;
+}
+
+/**
+ * Extracts package information from container manifests using rechunker labels
+ *
+ * Used for upstream (Bazzite) images that don't generate SBOMs.
+ */
+function getPackagesFromLabels(manifests: Record<string, Manifest>): ImagePackages {
+  const packages: ImagePackages = {};
+
+  for (const [img, manifest] of Object.entries(manifests)) {
+    try {
+      if (manifest.Labels?.["dev.hhd.rechunk.info"]) {
+        packages[img] = JSON.parse(manifest.Labels["dev.hhd.rechunk.info"]).packages as PackageInfo;
+      }
+    } catch (error) {
+      console.log(`Failed to get packages for ${img}:\n${(error as Error).message}`);
+    }
+  }
+
+  return packages;
 }
 
 /**
@@ -463,9 +612,9 @@ async function getUpstreamSection(
     // Fetch previous upstream manifests if not provided
     const upstreamPrev = upstreamPrevManifests || await getUpstreamManifests(prevTag);
 
-    // Extract package versions from both manifests
-    const prevVersions = getVersions(upstreamPrev);
-    const currVersions = getVersions(upstreamCurr);
+    // Extract package versions from both manifests (upstream uses rechunker labels)
+    const prevVersions = getVersionsFromPackages(getPackagesFromLabels(upstreamPrev));
+    const currVersions = getVersionsFromPackages(getPackagesFromLabels(upstreamCurr));
 
     // Combine all package names from both versions
     const pkgs = Array.from(new Set([
@@ -531,14 +680,14 @@ async function getUpstreamSection(
 /**
  * Groups packages into common and category-specific sets
  *
- * @param prev - Previous manifests
- * @param manifests - Current manifests
- * @returns Tuple containing [commonPackages, categoryPackages]
+ * @param prevTag - Previous version tag
+ * @param currTag - Current version tag
+ * @returns Tuple containing [commonPackages, categoryPackages, currImagePackages, prevImagePackages]
  */
-function getPackageGroups(
-  prev: Record<string, Manifest>,
-  manifests: Record<string, Manifest>
-): [string[], Record<string, string[]>] {
+async function getPackageGroups(
+  prevTag: string,
+  currTag: string
+): Promise<[string[], Record<string, string[]>, ImagePackages, ImagePackages]> {
   const common = new Set<string>();
   const others: Record<string, Set<string>> = {};
 
@@ -546,8 +695,10 @@ function getPackageGroups(
     others[key] = new Set<string>();
   }
 
-  const npkg = getPackages(manifests);
-  const ppkg = getPackages(prev);
+  console.log(`\nFetching current packages for ${currTag}...`);
+  const npkg = await getPackagesFromSbom(currTag);
+  console.log(`\nFetching previous packages for ${prevTag}...`);
+  const ppkg = await getPackagesFromSbom(prevTag);
 
   const keys = new Set([...Object.keys(npkg), ...Object.keys(ppkg)]);
   const pkg: Record<string, Set<string>> = {};
@@ -625,23 +776,26 @@ function getPackageGroups(
 
   return [
     Array.from(common).sort(),
-    Object.fromEntries(Object.entries(others).map(([k, v]) => [k, Array.from(v).sort()]))
+    Object.fromEntries(Object.entries(others).map(([k, v]) => [k, Array.from(v).sort()])),
+    npkg,
+    ppkg
   ];
 }
 
 /**
- * Extracts version information from manifests, cleaning Fedora suffixes
+ * Extracts version information from ImagePackages, cleaning epoch and Fedora suffixes
  *
- * @param manifests - Mapping of image manifests
+ * @param packages - Mapping of image names to their package info
  * @returns Mapping of package names to cleaned version strings
  */
-function getVersions(manifests: Record<string, Manifest>): Record<string, string> {
+function getVersionsFromPackages(packages: ImagePackages): Record<string, string> {
   const versions: Record<string, string> = {};
-  const pkgs = getPackages(manifests);
 
-  for (const imgPkgs of Object.values(pkgs)) {
+  for (const imgPkgs of Object.values(packages)) {
     for (const [pkg, v] of Object.entries(imgPkgs)) {
-      versions[pkg] = v.replace(FEDORA_PATTERN, "");
+      let cleaned = v.replace(EPOCH_PATTERN, "");
+      cleaned = cleaned.replace(FEDORA_PATTERN, "");
+      versions[pkg] = cleaned;
     }
   }
 
@@ -797,6 +951,8 @@ async function getCommits(
  * @param target - Target branch/tag (e.g., 'stable', 'main')
  * @param pretty - Optional pretty title for the changelog
  * @param workdir - Git working directory for commit history extraction
+ * @param prev - Previous version tag
+ * @param curr - Current version tag
  * @param prevManifests - Previous version manifests for Serpentine images
  * @param manifests - Current version manifests for Serpentine images
  * @param upstreamCurrManifests - Optional current upstream base image manifests
@@ -816,18 +972,16 @@ async function generateChangelog(
   target: string,
   pretty: string | null,
   workdir: string,
+  prev: string,
+  curr: string,
   prevManifests: Record<string, Manifest>,
   manifests: Record<string, Manifest>,
   upstreamCurrManifests?: Record<string, Manifest>,
   upstreamPrevManifests?: Record<string, Manifest>
 ): Promise<[string, string]> {
-  const [common, others] = getPackageGroups(prevManifests, manifests);
-  const versions = getVersions(manifests);
-  const prevVersions = getVersions(prevManifests);
-
-  // Note: prev and curr should be passed in from main to match Python behavior
-  // But for compatibility, we'll call getTags here too
-  const [prev, curr] = getTags(target, manifests);
+  const [common, others, currPackages, prevPackages] = await getPackageGroups(prev, curr);
+  const versions = getVersionsFromPackages(currPackages);
+  const prevVersions = getVersionsFromPackages(prevPackages);
 
   // Generate pretty title if not provided
   if (!pretty) {
@@ -1003,7 +1157,9 @@ async function main(): Promise<void> {
     options.handwritten || null,
     finalTarget,
     options.pretty || null,
-    options.workdir,
+    options.workdir || ".",
+    prev,
+    curr,
     prevManifests,
     manifests,
     upstreamCurrManifests,
@@ -1026,6 +1182,6 @@ async function main(): Promise<void> {
 }
 
 // Execute main function if this file is run directly
-if (import.meta.main) {
+if ((import.meta as any).main) {
   main().catch(console.error);
 }

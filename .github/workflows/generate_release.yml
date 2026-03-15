@@ -31,10 +31,17 @@ jobs:
           fi
           echo "target=$TARGET" >> $GITHUB_OUTPUT
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install ORAS
+        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+
       - name: Generate Release Text
         id: generate-release
         run: |
-          python3 ./.github/workflows/changelog.py \
+          bun ./.github/workflows/changelog.ts \
             "${{ steps.get-target.outputs.target }}" \
             ./output.env ./changelog.md --workdir . --handwritten "${{ github.event.inputs.handwritten }}"
           source ./output.env
