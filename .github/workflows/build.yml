@@ -277,6 +277,17 @@ jobs:
           df -h /
           sudo du -sh /var/lib/containers || true
 
+      - name: Load built image into rootful podman storage
+        run: |
+          set -o pipefail
+
+          image_ref="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+
+          echo "Copying ${image_ref} from user storage to rootful podman storage for rechunking"
+          podman image exists "$image_ref"
+          podman save --format oci-archive "$image_ref" | sudo podman load
+          sudo podman image exists "$image_ref"
+
       # Rechunk is a script that we use on Universal Blue to make sure there isnt a single huge layer when your image gets published.
       # This does not make your image faster to download, just provides better resumability and fixes a few errors.
       # Documentation for Rechunk is provided on their github repository at https://github.com/hhd-dev/rechunk
@@ -296,7 +307,7 @@ jobs:
       - name: Load in podman and tag
         run: |
           IMAGE=$(podman pull ${{ steps.rechunk.outputs.ref }})
-          sudo rm -rf ${{ steps.rechunk.outputs.output }}
+          sudo rm -rf ${{ steps.rechunk.outputs.location }}
           for tag in ${{ steps.metadata.outputs.tags }}; do
             podman tag $IMAGE ${{ env.IMAGE_NAME }}:$tag
           done
