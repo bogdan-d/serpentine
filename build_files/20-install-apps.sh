@@ -161,11 +161,6 @@ dnf5 install -y "${INSTALL_FEDORA_PACKAGES[@]}"
 echo "Removing ${#REMOVE_FEDORA_PACKAGES[@]} unwanted packages from Fedora base image..."
 dnf5 remove -y "${REMOVE_FEDORA_PACKAGES[@]}"
 
-# Swap out rpm-ostree for an older version to work around bootc 1.13.0-2 issues with `rpm-ostree upgrade`
-# https://github.com/coreos/rpm-ostree/issues/5567
-# https://github.com/ublue-os/aurora/commit/b4dcd573235c3bde6f14a8a7ed526223b2b14ee9
-dnf5 -y swap rpm-ostree rpm-ostree-2025.12-1.fc"$(rpm -E %fedora)"
-
 # Docker packages from their repo
 echo "Installing Docker from official repo..."
 dnf5 config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
