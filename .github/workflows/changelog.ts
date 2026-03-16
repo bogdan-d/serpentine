@@ -20,7 +20,7 @@ declare const Bun: any;
 /**
  * Container manifest information from skopeo inspection
  */
-interface Manifest {
+export interface Manifest {
   /** Image name / repository */
   Name?: string;
   /** Image digest */
@@ -53,19 +53,19 @@ interface Manifest {
 /**
  * Package information mapping package names to versions
  */
-interface PackageInfo {
+export interface PackageInfo {
   [packageName: string]: string;
 }
 
 /**
  * Image packages mapping image names to their package info
  */
-interface ImagePackages {
+export interface ImagePackages {
   [imageName: string]: PackageInfo;
 }
 
 /** SBOM artifact from Syft scan */
-interface SbomArtifact {
+export interface SbomArtifact {
   name: string;
   version: string;
   type: string;
@@ -73,7 +73,7 @@ interface SbomArtifact {
 }
 
 /** SBOM document structure */
-interface SbomDocument {
+export interface SbomDocument {
   artifacts?: SbomArtifact[];
   [key: string]: any;
 }
@@ -112,28 +112,28 @@ interface ImageTuple {
 // CONSTANTS AND CONFIGURATION
 // ============================================================================
 
-const IMAGE_BASE_NAME = "serpentine";
-const AUTHOR = "bogdan-d";
+export const IMAGE_BASE_NAME = "serpentine";
+export const AUTHOR = "bogdan-d";
 
 /** Container registry URL */
-const REGISTRY = `docker://ghcr.io/${AUTHOR}/`;
+export const REGISTRY = `docker://ghcr.io/${AUTHOR}/`;
 
-const IMAGES = [
+export const IMAGES = [
   IMAGE_BASE_NAME,
   // `${IMAGE_BASE_NAME}-nvidia`,
 ];
 
 /** Number of retry attempts for network operations */
-const RETRIES = 3;
+export const RETRIES = 3;
 
 /** Wait time between retries in seconds */
-const RETRY_WAIT = 5;
+export const RETRY_WAIT = 5;
 
 /** Regex pattern to match Fedora version suffixes */
-const FEDORA_PATTERN = /\.fc\d\d/;
+export const FEDORA_PATTERN = /\.fc\d\d/;
 
 /** Regex pattern to match epoch prefixes (e.g., "1:25.2.7-1" -> "25.2.7-1") */
-const EPOCH_PATTERN = /^\d+:/;
+export const EPOCH_PATTERN = /^\d+:/;
 
 /** Regex pattern to match stable version tags */
 const STABLE_START_PATTERN = /\d\d\.\d/;
@@ -225,12 +225,14 @@ const BLACKLIST_VERSIONS = [
   "plasma-desktop",
   "atheros-firmware",
   "podman",
-  "docker",
+  "docker-ce",
   "nvidia-driver",
   "rocm-runtime",
 ];
 
-const PKG_ALIAS: Record<string, string> = {};
+const PKG_ALIAS: Record<string, string> = {
+  "docker-ce": "docker",
+};
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -241,7 +243,7 @@ const PKG_ALIAS: Record<string, string> = {};
  *
  * @returns Generator yielding image tuples with name and components
  */
-function* getImages(): Generator<ImageTuple> {
+export function* getImages(): Generator<ImageTuple> {
   for (const img of IMAGES) {
     const base = img.includes('deck') ? 'deck' : 'desktop';
     const de = img.includes('gnome') ? 'gnome' : 'kde';
@@ -364,7 +366,7 @@ function getTags(target: string, manifests: Record<string, Manifest>): [string, 
 /**
  * Inspect a container image via skopeo and parse the manifest JSON
  */
-async function inspectImage(ref: string): Promise<Manifest | null> {
+export async function inspectImage(ref: string): Promise<Manifest | null> {
   let output: string | null = null;
   for (let i = 0; i < RETRIES; i++) {
     try {
@@ -394,7 +396,7 @@ async function inspectImage(ref: string): Promise<Manifest | null> {
 /**
  * Gets image digest via skopeo inspect
  */
-async function getImageDigest(image: string, tag: string): Promise<string> {
+export async function getImageDigest(image: string, tag: string): Promise<string> {
   const result = await Bun.$`skopeo inspect docker://${image}:${tag}`.text();
   const manifest = JSON.parse(result);
   return manifest.Digest as string;
@@ -406,7 +408,7 @@ async function getImageDigest(image: string, tag: string): Promise<string> {
  * Discovers SBOM referrers attached to the image, pulls the SBOM artifact,
  * and handles both .zst (decompresses with zstd) and .json formats.
  */
-async function getSbom(image: string, digest: string): Promise<SbomDocument> {
+export async function getSbom(image: string, digest: string): Promise<SbomDocument> {
   const fullRef = `${image}@${digest}`;
 
   // Find the SBOM referrer attached to this image
@@ -457,7 +459,7 @@ async function getSbom(image: string, digest: string): Promise<SbomDocument> {
  * Filters artifacts where type === "rpm" and keeps the more specific version
  * (the one with epoch) if a duplicate is encountered.
  */
-function parseSbomPackages(sbom: SbomDocument): PackageInfo {
+export function parseSbomPackages(sbom: SbomDocument): PackageInfo {
   const packages: PackageInfo = {};
 
   for (const artifact of sbom.artifacts || []) {
@@ -479,7 +481,7 @@ function parseSbomPackages(sbom: SbomDocument): PackageInfo {
 /**
  * Gets packages for all Serpentine images via SBOM, with fallback to rechunker labels
  */
-async function getPackagesFromSbom(target: string): Promise<ImagePackages> {
+export async function getPackagesFromSbom(target: string): Promise<ImagePackages> {
   const packages: ImagePackages = {};
   const imgs = Array.from(getImages());
 
@@ -833,14 +835,15 @@ async function generateChangelog(
 
   // Replace major package version placeholders
   for (const [pkg, v] of Object.entries(versions)) {
+    const templateKey = PKG_ALIAS[pkg] || pkg;
     if (!prevVersions[pkg] || prevVersions[pkg] === v) {
       changelog = changelog.replace(
-        `{pkgrel:${pkg}}`,
+        `{pkgrel:${templateKey}}`,
         PATTERN_PKGREL.replace("{version}", v)
       );
     } else {
       changelog = changelog.replace(
-        `{pkgrel:${pkg}}`,
+        `{pkgrel:${templateKey}}`,
         PATTERN_PKGREL_CHANGED.replace("{prev}", prevVersions[pkg]).replace("{new}", v)
       );
     }
