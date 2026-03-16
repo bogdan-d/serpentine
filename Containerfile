@@ -44,6 +44,9 @@ RUN --mount=type=bind,from=ctx,source=/,target=/run/context \
     mkdir -p /var/roothome && \
     /run/context/build_files/build.sh
 
+## Restore CMD lost during upstream rechunking (fedora-bootc sets /sbin/init)
+CMD ["/sbin/init"]
+
 ### LINTING
 ## Verify final image and contents are correct.
 ## fix: don't leak /{run,tmp} into the final image
