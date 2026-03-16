@@ -180,6 +180,11 @@ const OTHER_NAMES: Record<string, string> = {
   nvidia: "### Nvidia Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
 };
 
+/** Main changelog template */
+const NVIDIA_ROW = IMAGES.some((img) => img.includes("nvidia"))
+  ? "| **Nvidia** | {pkgrel:nvidia-driver} |\n"
+  : "";
+
 /** Template for upstream base image changes section with major packages */
 const UPSTREAM_PAT = `---
 
@@ -197,8 +202,9 @@ const UPSTREAM_PAT = `---
 | **Gamescope** | {pkgrel:gamescope} |
 | **KDE** | {pkgrel:plasma-desktop} |
 | **Podman** | {pkgrel:podman} |
-| **Nvidia** | {pkgrel:nvidia-driver} |
+| **Docker** | {pkgrel:docker} |
 | **ROCm** | {pkgrel:rocm-runtime} |
+${NVIDIA_ROW}
 
 ### Package changes (from upstream: ${UPSTREAM_IMAGE})
 | | Name | Previous | New |
@@ -215,11 +221,6 @@ const COMMIT_FORMAT = `\n| **[{short}](https://github.com/${AUTHOR}/${IMAGE_BASE
 /** Template for changelog title */
 const CHANGELOG_TITLE = "{tag}: {pretty}";
 
-/** Main changelog template */
-const NVIDIA_ROW = IMAGES.some((img) => img.includes("nvidia"))
-  ? "| **Nvidia** | {pkgrel:nvidia-driver} |\n"
-  : "";
-
 const CHANGELOG_FORMAT = `{handwritten}
 
 From previous \`{target}\` version \`{prev}\` there have been the following changes. **One package per new version shown.**
@@ -234,7 +235,8 @@ From previous \`{target}\` version \`{prev}\` there have been the following chan
 | **KDE** | {pkgrel:plasma-desktop} |
 | **Podman** | {pkgrel:podman} |
 | **Docker** | {pkgrel:docker} |
-${NVIDIA_ROW}| **ROCm** | {pkgrel:rocm-runtime} |
+| **ROCm** | {pkgrel:rocm-runtime} |
+${NVIDIA_ROW}
 
 {changes}
 
