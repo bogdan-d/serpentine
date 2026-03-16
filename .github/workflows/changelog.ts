@@ -123,15 +123,6 @@ const IMAGES = [
   // `${IMAGE_BASE_NAME}-nvidia`,
 ];
 
-/** Upstream (base) image used to build Serpentine */
-const UPSTREAM_IMAGE = "ublue-os/bazzite";
-
-/** Container registry URL for upstream */
-const UPSTREAM_REGISTRY = "docker://ghcr.io/";
-
-/** URL template for upstream releases */
-const UPSTREAM_RELEASE_URL = "https://github.com/ublue-os/bazzite/releases/tag/{upstream_tag}";
-
 /** Number of retry attempts for network operations */
 const RETRIES = 3;
 
@@ -184,33 +175,6 @@ const OTHER_NAMES: Record<string, string> = {
 const NVIDIA_ROW = IMAGES.some((img) => img.includes("nvidia"))
   ? "| **Nvidia** | {pkgrel:nvidia-driver} |\n"
   : "";
-
-/** Template for upstream base image changes section with major packages */
-const UPSTREAM_PAT = `---
-
-## Upstream Base Image [${UPSTREAM_IMAGE}](${UPSTREAM_RELEASE_URL})
-**Release Date:** \`{upstream_created}\` (_{time_ago}_)
-
----
-
-### Major packages (from upstream: \`${UPSTREAM_IMAGE}\`)
-| Name | Version |
-| --- | --- |
-| **Kernel** | {pkgrel:kernel} |
-| **Firmware** | {pkgrel:atheros-firmware} |
-| **Mesa** | {pkgrel:mesa-filesystem} |
-| **Gamescope** | {pkgrel:gamescope} |
-| **KDE** | {pkgrel:plasma-desktop} |
-| **Podman** | {pkgrel:podman} |
-| **Docker** | {pkgrel:docker} |
-| **ROCm** | {pkgrel:rocm-runtime} |
-${NVIDIA_ROW}
-
-### Package changes (from upstream: ${UPSTREAM_IMAGE})
-| | Name | Previous | New |
-| --- | --- | --- | --- |{changes}
-
-`;
 
 /** Template for commits section */
 const COMMITS_FORMAT = "### Commits\n| Hash | Subject | Author |\n| --- | --- | --- |{commits}\n\n";
@@ -531,160 +495,6 @@ async function getPackagesFromSbom(target: string): Promise<ImagePackages> {
 }
 
 /**
- * Extracts package information from container manifests using rechunker labels
- *
- * Used for upstream (Bazzite) images that don't generate SBOMs.
- */
-function getPackagesFromLabels(manifests: Record<string, Manifest>): ImagePackages {
-  const packages: ImagePackages = {};
-
-  for (const [img, manifest] of Object.entries(manifests)) {
-    try {
-      if (manifest.Labels?.["dev.hhd.rechunk.info"]) {
-        packages[img] = JSON.parse(manifest.Labels["dev.hhd.rechunk.info"]).packages as PackageInfo;
-      }
-    } catch (error) {
-      console.log(`Failed to get packages for ${img}:\n${(error as Error).message}`);
-    }
-  }
-
-  return packages;
-}
-
-/**
- * Fetches upstream (base) image manifests for a specific target/tag
- *
- * Retrieves the manifest for the upstream base image (bazzite) that Serpentine
- * is built on top of. Returns a single-entry mapping to maintain compatibility with
- * helper functions that expect Record<string, Manifest> format.
- *
- * @param target - The target tag to fetch upstream manifest for (e.g., 'stable')
- * @returns Promise resolving to a mapping with single upstream image manifest,
- *          or empty object if fetch fails
- *
- * @example
- * const upstream = await getUpstreamManifests('stable');
- * // Returns: { 'ublue-os/bazzite': {...} }
- */
-async function getUpstreamManifests(target: string): Promise<Record<string, Manifest>> {
-  const out: Record<string, Manifest> = {};
-  const ref = `${UPSTREAM_REGISTRY}${UPSTREAM_IMAGE}:${target}`;
-  console.log(`Getting upstream ${UPSTREAM_IMAGE}:${target} manifest.`);
-  const manifest = await inspectImage(ref);
-  if (manifest) {
-    out[UPSTREAM_IMAGE] = manifest;
-  } else {
-    console.log(`Failed to get upstream ${UPSTREAM_IMAGE}:${target}, skipping upstream section`);
-  }
-  return out;
-}
-
-/**
- * Builds the upstream changes section for the changelog.
- *
- * Compares the upstream base image packages between its previous and current tag
- * to show what changed in the base layer that Serpentine is built on top of.
- *
- * @param target - The target branch/tag (e.g., 'stable')
- * @param upstreamCurrManifests - Already-fetched current upstream manifests (optional, will fetch if not provided)
- * @param upstreamPrevManifests - Already-fetched previous upstream manifests (optional, will fetch if not provided)
- * @returns Formatted markdown string with upstream package changes, or empty string on failure
- *
- * @remarks
- * This function uses the same tag selection logic as Serpentine images to find
- * the previous and current version tags in the upstream image's RepoTags.
- */
-async function getUpstreamSection(
-  target: string,
-  upstreamCurrManifests?: Record<string, Manifest>,
-  upstreamPrevManifests?: Record<string, Manifest>
-): Promise<string> {
-  try {
-    // Fetch current upstream manifests if not provided
-    const upstreamCurr = upstreamCurrManifests || await getUpstreamManifests(target);
-    if (!Object.keys(upstreamCurr).length) return "";
-
-    // Derive previous and current tags from upstream manifest
-    let prevTag = "";
-    let currTag = "";
-    try {
-      [prevTag, currTag] = getTags(target, upstreamCurr);
-      console.log(`Upstream previous tag: ${prevTag}`);
-      console.log(`Upstream  current tag: ${currTag}`);
-    } catch (e) {
-      console.log(`Failed to determine upstream tags: ${(e as Error).message}`);
-      return "";
-    }
-
-    // Fetch previous upstream manifests if not provided
-    const upstreamPrev = upstreamPrevManifests || await getUpstreamManifests(prevTag);
-
-    // Extract package versions from both manifests (upstream uses rechunker labels)
-    const prevVersions = getVersionsFromPackages(getPackagesFromLabels(upstreamPrev));
-    const currVersions = getVersionsFromPackages(getPackagesFromLabels(upstreamCurr));
-
-    // Combine all package names from both versions
-    const pkgs = Array.from(new Set([
-      ...Object.keys(prevVersions),
-      ...Object.keys(currVersions)
-    ])).sort();
-
-    // Calculate and format package changes
-    const chg = calculateChanges(pkgs, prevVersions, currVersions);
-    if (!chg) return "";
-
-    // Extract upstream creation date
-    const first = Object.values(upstreamCurr)[0] as Manifest;
-    const upstreamDate = first.Created ? (new Date(first.Created)).toString() : "unknown";
-    let timeAgo = "unknown";
-    if (first.Created) {
-      try {
-        const createdTime = new Date(first.Created);
-        const delta = new Date().getTime() - createdTime.getTime();
-        const days = Math.floor(delta / (1000 * 60 * 60 * 24));
-        if (days === 0) {
-          timeAgo = "today";
-        } else if (days === 1) {
-          timeAgo = "1 day ago";
-        } else {
-          timeAgo = `${days} days ago`;
-        }
-      } catch (error) {
-        timeAgo = "unknown";
-      }
-    }
-
-    // Build upstream section with major packages
-    let upstreamSection = UPSTREAM_PAT
-      .replace("{changes}", chg)
-      .replace("{upstream_created}", upstreamDate)
-      .replace("{time_ago}", timeAgo)
-      .replace("{upstream_tag}", currTag)
-      ;
-
-    // Replace major package version placeholders
-    for (const [pkg, v] of Object.entries(currVersions)) {
-      if (!prevVersions[pkg] || prevVersions[pkg] === v) {
-        upstreamSection = upstreamSection.replace(
-          `{pkgrel:${PKG_ALIAS[pkg] || pkg}}`,
-          PATTERN_PKGREL.replace("{version}", v)
-        );
-      } else {
-        upstreamSection = upstreamSection.replace(
-          `{pkgrel:${PKG_ALIAS[pkg] || pkg}}`,
-          PATTERN_PKGREL_CHANGED.replace("{prev}", prevVersions[pkg]).replace("{new}", v)
-        );
-      }
-    }
-
-    return upstreamSection;
-  } catch (error) {
-    console.log(`Failed to build upstream section:\n${(error as Error).message}`);
-    return "";
-  }
-}
-
-/**
  * Groups packages into common and category-specific sets
  *
  * @param prevTag - Previous version tag
@@ -935,24 +745,12 @@ async function getCommits(
 /**
  * Generates the complete changelog with all sections
  *
- * @param handwritten - Optional handwritten changelog content
- * @param target - Target branch/tag
- * @param pretty - Optional pretty title
- * @param workdir - Git working directory
- * @param prevManifests - Previous version manifests
- * @param manifests - Current version manifests
- * @returns Tuple containing [title, changelogContent]
- */
-/**
- * Generates the complete changelog with all sections
- *
  * Orchestrates the generation of a comprehensive changelog by:
  * 1. Identifying package groups (common and category-specific)
  * 2. Extracting version information from manifests
  * 3. Computing git commit history between versions
- * 4. Including upstream base image changes
- * 5. Calculating package changes for each category
- * 6. Formatting everything into markdown
+ * 4. Calculating package changes for each category
+ * 5. Formatting everything into markdown
  *
  * @param handwritten - Optional handwritten changelog content to prepend
  * @param target - Target branch/tag (e.g., 'stable', 'main')
@@ -962,15 +760,12 @@ async function getCommits(
  * @param curr - Current version tag
  * @param prevManifests - Previous version manifests for Serpentine images
  * @param manifests - Current version manifests for Serpentine images
- * @param upstreamCurrManifests - Optional current upstream base image manifests
- * @param upstreamPrevManifests - Optional previous upstream base image manifests
  * @returns Tuple containing [title, changelogContent]
  *
  * @remarks
  * The function generates a multi-section changelog including:
  * - Major package versions (kernel, firmware, mesa, etc.)
  * - Git commit history
- * - Upstream base image changes (if manifests provided)
  * - Common package changes (across all images)
  * - Category-specific changes (desktop, deck, KDE, GNOME, NVIDIA)
  */
@@ -983,8 +778,6 @@ async function generateChangelog(
   curr: string,
   prevManifests: Record<string, Manifest>,
   manifests: Record<string, Manifest>,
-  upstreamCurrManifests?: Record<string, Manifest>,
-  upstreamPrevManifests?: Record<string, Manifest>
 ): Promise<[string, string]> {
   const [common, others, currPackages, prevPackages] = await getPackageGroups(prev, curr);
   const versions = getVersionsFromPackages(currPackages);
@@ -1040,14 +833,6 @@ async function generateChangelog(
 
   // Add git commit history
   changes += await getCommits(prevManifests, manifests, workdir);
-
-  // Add upstream base image changes (pass pre-fetched manifests to avoid redundant network calls)
-  try {
-    const upstream = await getUpstreamSection(target, upstreamCurrManifests, upstreamPrevManifests);
-    changes += upstream;
-  } catch (error) {
-    console.log(`Error adding upstream section: ${(error as Error).message}`);
-  }
 
   // Add common package changes (packages present in all Serpentine images)
   const commonChanges = calculateChanges(common, prevVersions, versions);
@@ -1117,9 +902,8 @@ function parseArguments(args: string[]): ChangelogOptions {
  * 2. Fetches current Serpentine image manifests for target
  * 3. Derives previous and current version tags
  * 4. Fetches previous Serpentine image manifests
- * 5. Fetches upstream base image manifests (current and previous) for comparison
- * 6. Generates comprehensive changelog with all sections
- * 7. Writes output to console and optionally to files
+ * 5. Generates comprehensive changelog with all sections
+ * 6. Writes output to console and optionally to files
  *
  * @remarks
  * Manifests are fetched once per unique image:tag combination and reused
@@ -1142,23 +926,7 @@ async function main(): Promise<void> {
   console.log(`\n=== Fetching Serpentine ${prev} manifests ===`);
   const prevManifests = await getManifests(prev);
 
-  // Fetch upstream manifests (both current and previous) to avoid redundant calls
-  console.log(`\n=== Fetching upstream base image manifests ===`);
-  const upstreamCurrManifests = await getUpstreamManifests(finalTarget);
-
-  let upstreamPrevManifests: Record<string, Manifest> = {};
-  if (Object.keys(upstreamCurrManifests).length > 0) {
-    try {
-      // Derive upstream tags from the current upstream manifest
-      const [upstreamPrev] = getTags(finalTarget, upstreamCurrManifests);
-      console.log(`Fetching upstream ${upstreamPrev} manifests for comparison...`);
-      upstreamPrevManifests = await getUpstreamManifests(upstreamPrev);
-    } catch (error) {
-      console.log(`Could not fetch upstream previous manifests: ${(error as Error).message}`);
-    }
-  }
-
-  // Generate changelog with all pre-fetched manifests
+  // Generate changelog
   console.log(`\n=== Generating changelog ===`);
   const [title, changelog] = await generateChangelog(
     options.handwritten || null,
@@ -1169,8 +937,6 @@ async function main(): Promise<void> {
     curr,
     prevManifests,
     manifests,
-    upstreamCurrManifests,
-    upstreamPrevManifests,
   );
 
   console.log(`\nChangelog:\n# ${title}\n${changelog}`);
