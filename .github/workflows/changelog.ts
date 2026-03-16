@@ -285,6 +285,24 @@ async function getManifests(target: string): Promise<Record<string, Manifest>> {
 }
 
 /**
+ * Version-aware comparator for image tags.
+ * Handles formats like "43.20260316", "43.20260316.1", "testing-43.20260316.2"
+ * by splitting on dots and comparing each segment numerically.
+ */
+function compareVersionTags(a: string, b: string): number {
+  const stripPrefix = (t: string) => t.replace(/^[a-z]+-/, "");
+  const aParts = stripPrefix(a).split(".").map(Number);
+  const bParts = stripPrefix(b).split(".").map(Number);
+
+  for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+    const aVal = aParts[i] ?? -1;
+    const bVal = bParts[i] ?? -1;
+    if (aVal !== bVal) return aVal - bVal;
+  }
+  return 0;
+}
+
+/**
  * Extracts version tags from manifests, finding current and previous versions
  *
  * Analyzes the RepoTags from manifests to identify the two most recent version tags
@@ -334,7 +352,7 @@ function getTags(target: string, manifests: Record<string, Manifest>): [string, 
     }
   }
 
-  const sortedTags = Array.from(tags).sort();
+  const sortedTags = Array.from(tags).sort(compareVersionTags);
 
   if (sortedTags.length < 2) {
     throw new Error("No current and previous tags found");

@@ -196,6 +196,39 @@ jobs:
           echo "IMAGE_NAME=${BASE_IMAGE/bazzite/serpentine}" | sed 's/-deck//' | tee -a "$GITHUB_ENV"
       ## END:FROM BAZZITE-DX
 
+      - name: Compute daily version tag
+        id: daily_tag
+        env:
+          MAJOR: ${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}
+        run: |
+          TODAY=$(date -u +%Y%m%d)
+          BASE_TAG="${MAJOR}.${TODAY}"
+
+          # Try to list existing tags; if the image doesn't exist yet, default to first build
+          EXISTING_TAGS=$(skopeo list-tags "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}" 2>/dev/null | jq -r '.Tags[]' 2>/dev/null || echo "")
+
+          # Find highest counter for today's date pattern
+          COUNTER=0
+          for tag in $EXISTING_TAGS; do
+            if [[ "$tag" == "${BASE_TAG}" ]] && (( COUNTER < 1 )); then
+              COUNTER=1
+            elif [[ "$tag" =~ ^${BASE_TAG}\.([0-9]+)$ ]]; then
+              N="${BASH_REMATCH[1]}"
+              if (( N + 1 > COUNTER )); then
+                COUNTER=$((N + 1))
+              fi
+            fi
+          done
+
+          if (( COUNTER == 0 )); then
+            VERSION_SUFFIX="${TODAY}"
+          else
+            VERSION_SUFFIX="${TODAY}.${COUNTER}"
+          fi
+
+          echo "suffix=${VERSION_SUFFIX}" >> $GITHUB_OUTPUT
+          echo "Daily version suffix: ${VERSION_SUFFIX}"
+
       # Image metadata for https://artifacthub.io/ - This is optional but is highly recommended so we all can get a index of all the custom images
       # The metadata by itself is not going to do anything, you choose if you want your image to be on ArtifactHub or not.
       - name: Image Metadata
@@ -208,9 +241,9 @@ jobs:
             type=raw,value=latest
             type=raw,value=stable
             type=raw,value=stable-${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}
-            type=raw,value=stable-${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}.{{date 'YYYYMMDD'}}
+            type=raw,value=stable-${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}.${{ steps.daily_tag.outputs.suffix }}
             type=raw,value=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}
-            type=raw,value=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}.{{date 'YYYYMMDD'}}
+            type=raw,value=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}.${{ steps.daily_tag.outputs.suffix }}
             type=sha,enable=${{ github.event_name == 'pull_request' }}
             type=ref,event=pr
           labels: |
