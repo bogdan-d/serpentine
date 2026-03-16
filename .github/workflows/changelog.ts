@@ -216,6 +216,10 @@ const COMMIT_FORMAT = `\n| **[{short}](https://github.com/${AUTHOR}/${IMAGE_BASE
 const CHANGELOG_TITLE = "{tag}: {pretty}";
 
 /** Main changelog template */
+const NVIDIA_ROW = IMAGES.some((img) => img.includes("nvidia"))
+  ? "| **Nvidia** | {pkgrel:nvidia-driver} |\n"
+  : "";
+
 const CHANGELOG_FORMAT = `{handwritten}
 
 From previous \`{target}\` version \`{prev}\` there have been the following changes. **One package per new version shown.**
@@ -229,8 +233,8 @@ From previous \`{target}\` version \`{prev}\` there have been the following chan
 | **Gamescope** | {pkgrel:gamescope} |
 | **KDE** | {pkgrel:plasma-desktop} |
 | **Podman** | {pkgrel:podman} |
-| **Nvidia** | {pkgrel:nvidia-driver} |
-| **ROCm** | {pkgrel:rocm-runtime} |
+| **Docker** | {pkgrel:docker} |
+${NVIDIA_ROW}| **ROCm** | {pkgrel:rocm-runtime} |
 
 {changes}
 
@@ -255,6 +259,7 @@ const BLACKLIST_VERSIONS = [
   "plasma-desktop",
   "atheros-firmware",
   "podman",
+  "docker",
   "nvidia-driver",
   "rocm-runtime",
 ];
