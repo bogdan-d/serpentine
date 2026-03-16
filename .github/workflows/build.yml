@@ -249,6 +249,17 @@ jobs:
             IMAGE_NAME=${{ env.IMAGE_NAME }}
             IMAGE_VENDOR=${{ github.repository_owner }}
 
+      - name: Load built image into rootful podman storage
+        run: |
+          set -o pipefail
+
+          image_ref="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+
+          echo "Copying ${image_ref} from user storage to rootful podman storage"
+          podman image exists "$image_ref"
+          podman save --format oci-archive "$image_ref" | sudo podman load
+          sudo podman image exists "$image_ref"
+
       - name: Setup Syft
         id: setup-syft
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -265,9 +276,9 @@ jobs:
           OCI_DIR: "/tmp/image-oci-dir"
         run: |
           mkdir -p ${OCI_DIR}/rootfs
-          podman container create --replace --name "${IMAGE}" "localhost/${IMAGE}:${DEFAULT_TAG}"
-          podman export "${IMAGE}" | sudo tar -C ${OCI_DIR}/rootfs -xf -
-          podman container rm "${IMAGE}"
+          sudo podman container create --replace --name "${IMAGE}" "localhost/${IMAGE}:${DEFAULT_TAG}"
+          sudo podman export "${IMAGE}" | sudo tar -C ${OCI_DIR}/rootfs -xf -
+          sudo podman container rm "${IMAGE}"
 
           SBOM="$(mktemp -d)/sbom.json"
           export SYFT_PARALLELISM=$(($(nproc)*2))
@@ -303,17 +314,6 @@ jobs:
           echo "Disk usage after prune:"
           df -h /
           sudo du -sh /var/lib/containers || true
-
-      - name: Load built image into rootful podman storage
-        run: |
-          set -o pipefail
-
-          image_ref="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
-
-          echo "Copying ${image_ref} from user storage to rootful podman storage for rechunking"
-          podman image exists "$image_ref"
-          podman save --format oci-archive "$image_ref" | sudo podman load
-          sudo podman image exists "$image_ref"
 
       # Rechunk is a script that we use on Universal Blue to make sure there isnt a single huge layer when your image gets published.
       # This does not make your image faster to download, just provides better resumability and fixes a few errors.
