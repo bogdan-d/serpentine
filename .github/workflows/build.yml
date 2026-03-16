@@ -287,34 +287,6 @@ jobs:
           echo "SBOM=${SBOM}" >> $GITHUB_OUTPUT
           sudo rm -rf ${OCI_DIR}
 
-      # Prune build caches and intermediate images (best-effort) to free disk before commit/push
-      - name: Prune build caches and intermediate images
-        if: always()
-        run: |
-          echo "Disk usage before prune:"
-          df -h /
-          sudo du -sh /var/lib/containers || true
-
-          # Try to remove stopped containers
-          if command -v podman >/dev/null 2>&1; then
-            sudo podman ps -a -q | xargs -r sudo podman rm -f || true
-            # Remove dangling images only
-            sudo podman images -a --filter dangling=true --format "{{.ID}}" | xargs -r sudo podman rmi -f || true
-            # System prune to remove build cache
-            sudo podman system prune -f || true
-          fi
-
-          if command -v buildah >/dev/null 2>&1; then
-            sudo buildah images -q --filter dangling=true | xargs -r sudo buildah rmi -f || true
-          fi
-
-          # Tidy temp directories
-          sudo rm -rf /tmp/* /var/tmp/* || true
-
-          echo "Disk usage after prune:"
-          df -h /
-          sudo du -sh /var/lib/containers || true
-
       # Rechunk is a script that we use on Universal Blue to make sure there isnt a single huge layer when your image gets published.
       # This does not make your image faster to download, just provides better resumability and fixes a few errors.
       # Documentation for Rechunk is provided on their github repository at https://github.com/hhd-dev/rechunk
@@ -339,16 +311,6 @@ jobs:
             podman tag $IMAGE ${{ env.IMAGE_NAME }}:$tag
           done
 
-      # These `if` statements are so that pull requests for your custom images do not make it publish any packages under your name without you knowing
-      # They also check if the runner is on the default branch so that things like the merge queue (if you enable it), are going to work
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       ## BEGIN:FROM BAZZITE-DX
       # Workaround bug where capital letters in your GitHub username make it impossible to push to GHCR.
       # https://github.com/macbre/push-to-ghcr/issues/12
@@ -362,6 +324,16 @@ jobs:
           echo "registry=${IMAGE_REGISTRY,,}" >> $GITHUB_OUTPUT
           echo "image=${IMAGE_NAME,,}" >> $GITHUB_OUTPUT
       ## END:FROM BAZZITE-DX
+
+      # These `if` statements are so that pull requests for your custom images do not make it publish any packages under your name without you knowing
+      # They also check if the runner is on the default branch so that things like the merge queue (if you enable it), are going to work
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push To GHCR
         uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
@@ -439,6 +411,34 @@ jobs:
           SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
         run: |
           cosign sign -y --key env://COSIGN_PRIVATE_KEY ${LOWERCASE_REGISTRY}/${IMAGE_NAME}@${SBOM_DIGEST}
+
+      # Prune build caches and intermediate images (best-effort) to free disk after pipeline completion
+      - name: Prune build caches and intermediate images
+        if: always()
+        run: |
+          echo "Disk usage before prune:"
+          df -h /
+          sudo du -sh /var/lib/containers || true
+
+          # Try to remove stopped containers
+          if command -v podman >/dev/null 2>&1; then
+            sudo podman ps -a -q | xargs -r sudo podman rm -f || true
+            # Remove dangling images only
+            sudo podman images -a --filter dangling=true --format "{{.ID}}" | xargs -r sudo podman rmi -f || true
+            # System prune to remove build cache
+            sudo podman system prune -f || true
+          fi
+
+          if command -v buildah >/dev/null 2>&1; then
+            sudo buildah images -q --filter dangling=true | xargs -r sudo buildah rmi -f || true
+          fi
+
+          # Tidy temp directories
+          sudo rm -rf /tmp/* /var/tmp/* || true
+
+          echo "Disk usage after prune:"
+          df -h /
+          sudo du -sh /var/lib/containers || true
 
   check:
     name: Check all builds successful
