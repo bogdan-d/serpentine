@@ -234,31 +234,31 @@ jobs:
 
       - name: Build Image
         id: build_image
-        uses: redhat-actions/buildah-build@7a95fa7ee0f02d552a32753e7414641a04307056 # v2
-        with:
-          containerfiles: |
-            ./Containerfile
-          # Postfix image name with -custom to make it a little more descriptive
-          # Syntax: https://docs.github.com/en/actions/learn-github-actions/expressions#format
-          image: ${{ env.IMAGE_NAME }}
-          tags: ${{ steps.metadata.outputs.tags }}
-          labels: ${{ steps.metadata.outputs.labels }}
-          oci: false
-          build-args: |
-            BASE_IMAGE=ghcr.io/${{ env.SOURCE_ORG }}/${{ matrix.base_image }}:${{ env.IMAGE_SOURCE_TAG || 'latest' }}
-            IMAGE_NAME=${{ env.IMAGE_NAME }}
-            IMAGE_VENDOR=${{ github.repository_owner }}
-
-      - name: Load built image into rootful podman storage
+        env:
+          TAGS: ${{ steps.metadata.outputs.tags }}
+          LABELS: ${{ steps.metadata.outputs.labels }}
         run: |
-          set -o pipefail
+          # Construct tag arguments (tags are space-separated from metadata action)
+          TAG_ARGS=()
+          for tag in ${TAGS}; do
+            TAG_ARGS+=(--tag "localhost/${IMAGE_NAME}:${tag}")
+          done
 
-          image_ref="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+          # Construct label arguments (labels are newline-separated key=value pairs)
+          LABEL_ARGS=()
+          while IFS= read -r label; do
+            [[ -n "${label}" ]] && LABEL_ARGS+=(--label "${label}")
+          done <<< "${LABELS}"
 
-          echo "Copying ${image_ref} from user storage to rootful podman storage"
-          podman image exists "$image_ref"
-          podman save --format oci-archive "$image_ref" | sudo podman load
-          sudo podman image exists "$image_ref"
+          sudo podman build \
+            --file ./Containerfile \
+            --format docker \
+            --build-arg "BASE_IMAGE=ghcr.io/${{ env.SOURCE_ORG }}/${{ matrix.base_image }}:${{ env.IMAGE_SOURCE_TAG || 'latest' }}" \
+            --build-arg "IMAGE_NAME=${{ env.IMAGE_NAME }}" \
+            --build-arg "IMAGE_VENDOR=${{ github.repository_owner }}" \
+            "${TAG_ARGS[@]}" \
+            "${LABEL_ARGS[@]}" \
+            .
 
       - name: Setup Syft
         id: setup-syft
@@ -411,34 +411,6 @@ jobs:
           SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
         run: |
           cosign sign -y --key env://COSIGN_PRIVATE_KEY ${LOWERCASE_REGISTRY}/${IMAGE_NAME}@${SBOM_DIGEST}
-
-      # Prune build caches and intermediate images (best-effort) to free disk after pipeline completion
-      - name: Prune build caches and intermediate images
-        if: always()
-        run: |
-          echo "Disk usage before prune:"
-          df -h /
-          sudo du -sh /var/lib/containers || true
-
-          # Try to remove stopped containers
-          if command -v podman >/dev/null 2>&1; then
-            sudo podman ps -a -q | xargs -r sudo podman rm -f || true
-            # Remove dangling images only
-            sudo podman images -a --filter dangling=true --format "{{.ID}}" | xargs -r sudo podman rmi -f || true
-            # System prune to remove build cache
-            sudo podman system prune -f || true
-          fi
-
-          if command -v buildah >/dev/null 2>&1; then
-            sudo buildah images -q --filter dangling=true | xargs -r sudo buildah rmi -f || true
-          fi
-
-          # Tidy temp directories
-          sudo rm -rf /tmp/* /var/tmp/* || true
-
-          echo "Disk usage after prune:"
-          df -h /
-          sudo du -sh /var/lib/containers || true
 
   check:
     name: Check all builds successful
