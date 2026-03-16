@@ -29,3 +29,7 @@ touch /etc/sysconfig/firewalld
 # Remove the argument if it already exists in the base image, then append our override
 sed -i '/^FIREWALLD_ARGS=/d' /etc/sysconfig/firewalld
 echo 'FIREWALLD_ARGS="--log-target=syslog"' >> /etc/sysconfig/firewalld
+
+# Remove bazzite/system_files/desktop/kinoite/usr/lib/systemd/system/sddm.service.d/override.conf
+# It adds ~30s to the boot time
+rm -f /usr/lib/systemd/system/sddm.service.d/override.conf
