@@ -68,6 +68,7 @@ INSTALL_FEDORA_PACKAGES=(
     edk2-ovmf
     flatpak-builder
     git-subtree
+    guestfs-tools
     # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
     gvfs
     gvfs-fuse
@@ -126,15 +127,15 @@ REMOVE_FEDORA_PACKAGES=(
 
 # ROCM doesn't work well on nvidia
 INSTALL_AMD_ONLY_PACKAGES=(
+    rocm-clinfo
     rocm-hip 
     rocm-opencl
     rocm-runtime
-    rocm-smi
+    rocm-smi # may only just need this
 )
 
 INSTALL_NVIDIA_ONLY_PACKAGES=(
 )
-
 
 # Install AMD GPU related packages if not nvidia image
 if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
