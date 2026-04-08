@@ -67,6 +67,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+      attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Prepare environment
@@ -404,7 +406,7 @@ jobs:
         run: |
           IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
           for tag in ${{ steps.metadata.outputs.tags }}; do
-            cosign sign -y --key env://COSIGN_PRIVATE_KEY $IMAGE_FULL:$tag
+            cosign sign -y --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false $IMAGE_FULL:$tag
           done
 
       - name: Install ORAS
@@ -443,7 +445,7 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
         run: |
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY ${LOWERCASE_REGISTRY}/${IMAGE_NAME}@${SBOM_DIGEST}
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false ${LOWERCASE_REGISTRY}/${IMAGE_NAME}@${SBOM_DIGEST}
 
   check:
     name: Check all builds successful
