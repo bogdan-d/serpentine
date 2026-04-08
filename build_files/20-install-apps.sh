@@ -65,21 +65,14 @@ INSTALL_FEDORA_PACKAGES=(
     # required to fix APU power management on AMD systems
     corectrl
     dbus-x11
-    edk2-ovmf
     flatpak-builder
     git-subtree
-    guestfs-tools
     # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
     gvfs
     gvfs-fuse
-    # incus
-    # incus-agent
     iotop
     iwd
     just
-    libvirt
-    libvirt-nss
-    # lxc
     nicstat
     numactl
     osbuild-selinux
@@ -91,16 +84,6 @@ INSTALL_FEDORA_PACKAGES=(
     powerstat
     powertop
     # python3-ramalama
-    qemu
-    qemu-char-spice
-    qemu-device-display-virtio-gpu
-    qemu-device-display-virtio-vga
-    qemu-device-usb-redirect
-    qemu-img
-    qemu-kvm
-    qemu-system-x86-core
-    qemu-user-binfmt
-    qemu-user-static
     restic
     rclone
     sysprof
@@ -110,10 +93,7 @@ INSTALL_FEDORA_PACKAGES=(
     udev-hid-bpf-stable
     udica
     usbmuxd
-    # virt-manager - we will use the flatpak version
-    virt-install
-    virt-v2v
-    virt-viewer
+    waypipe
     ydotool
 )
 
@@ -137,26 +117,57 @@ INSTALL_AMD_ONLY_PACKAGES=(
 INSTALL_NVIDIA_ONLY_PACKAGES=(
 )
 
+# Virtualization related packages
+INSTALL_VIRT_PACKAGES=(
+    edk2-ovmf
+    libvirt
+    libvirt-nss
+    # lxc
+    # incus
+    # incus-agent
+    qemu
+    qemu-char-spice
+    qemu-device-display-virtio-gpu
+    qemu-device-display-virtio-vga
+    qemu-device-usb-redirect
+    qemu-img
+    qemu-kvm
+    qemu-system-x86-core
+    qemu-user-binfmt
+    qemu-user-static
+    guestfs-tools
+    # virt-manager - we will use the flatpak version
+    virt-install
+    virt-v2v
+    virt-viewer
+)
+
+# Install the package group in one go
+echo "Installing ${#INSTALL_FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
+dnf5 install -y "${INSTALL_FEDORA_PACKAGES[@]}"
+
 # Install AMD GPU related packages if not nvidia image
 if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
     if [[ ${#INSTALL_AMD_ONLY_PACKAGES[@]} -gt 0 ]]; then
+        dnf5 remove -y \
+            mesa-libOpenCL
         echo "Installing AMD GPU related packages..."
-        dnf5 install -y "${INSTALL_AMD_ONLY_PACKAGES[@]}"
+        dnf5 --setopt=install_weak_deps=False install -y "${INSTALL_AMD_ONLY_PACKAGES[@]}"
     else
         echo "No AMD GPU related packages to install."
     fi
 else
     if [[ ${#INSTALL_NVIDIA_ONLY_PACKAGES[@]} -gt 0 ]]; then
         echo "Installing NVIDIA GPU related packages..."
-        dnf5 install -y "${INSTALL_NVIDIA_ONLY_PACKAGES[@]}"
+        dnf5 --setopt=install_weak_deps=False install -y "${INSTALL_NVIDIA_ONLY_PACKAGES[@]}"
     else
         echo "No NVIDIA GPU related packages to install."
     fi
 fi
 
-# Install the package group in one go
-echo "Installing ${#INSTALL_FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
-dnf5 install -y "${INSTALL_FEDORA_PACKAGES[@]}"
+# Install virtualization related packages
+echo "Installing ${#INSTALL_VIRT_PACKAGES[@]} virtualization related packages..."
+dnf5 --setopt=install_weak_deps=False install -y "${INSTALL_VIRT_PACKAGES[@]}"
 
 # Remove unwanted packages in one go
 echo "Removing ${#REMOVE_FEDORA_PACKAGES[@]} unwanted packages from Fedora base image..."
