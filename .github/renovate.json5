@@ -1,26 +1,14 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:best-practices",
+    "config:recommended"
   ],
-
-  "rebaseWhen": "never",
-
   "packageRules": [
     {
+      "matchUpdateTypes": ["minor", "pin", "digest", "pinDigest", "patch"]
       "automerge": true,
-      "matchUpdateTypes": ["pin", "pinDigest"]
-    },
-    {
-      "enabled": false,
-      "matchUpdateTypes": ["digest", "pinDigest", "pin"],
-      "matchDepTypes": ["container"],
-      "matchFileNames": [".github/workflows/**.yaml", ".github/workflows/**.yml"],
-    },
-    {
-      "automerge": true,
-      "matchUpdateTypes": ["digest"],
-      "matchDepNames": ["ghcr.io/ublue-os/bazzite"],
+      "automergeType": "pr",
+      "automergeStrategy": "squash"
     }
   ]
 }
