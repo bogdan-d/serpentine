@@ -200,7 +200,7 @@ if command -v chattr >/dev/null && command -v lsattr >/dev/null; then
     if [[ "$(stat -f -c %T "${DOCKER_DATA_ROOT}")" == "btrfs" ]]; then
         if ! lsattr -d "${DOCKER_DATA_ROOT}" | grep -q 'C'; then
             echo "Applying No_COW (+C) to ${DOCKER_DATA_ROOT} on btrfs..."
-            chattr +C "${DOCKER_DATA_ROOT}"
+            chattr -R +C "${DOCKER_DATA_ROOT}"
         else
             echo "No_COW already set on ${DOCKER_DATA_ROOT}."
         fi

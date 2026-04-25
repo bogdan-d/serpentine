@@ -4,7 +4,7 @@ set -euo pipefail
 
 source /usr/lib/ublue/setup-services/libsetup.sh
 
-version-script docker-nocow privileged 1 || exit 0
+version-script docker-nocow privileged 2 || exit 0
 
 DOCKER_DATA_ROOT="/var/lib/docker"
 
@@ -30,7 +30,7 @@ if [[ -n "$(find "${DOCKER_DATA_ROOT}" -mindepth 1 -maxdepth 1 -print -quit 2>/d
     echo "No_COW will apply to new files; existing files keep their current attributes."
 fi
 
-chattr +C "${DOCKER_DATA_ROOT}"
+chattr -R +C "${DOCKER_DATA_ROOT}"
 
 if lsattr -d "${DOCKER_DATA_ROOT}" | grep -q 'C'; then
     echo "Docker No_COW enabled on ${DOCKER_DATA_ROOT}."
