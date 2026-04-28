@@ -20,9 +20,9 @@ install-system-flatpaks:
     FLATPAK_LIST="$(curl https://raw.githubusercontent.com/ublue-os/bazzite/main/installer/${FLATPAKS} | tr '\n' ' ')"
     flatpak --system -y install --reinstall --or-update ${FLATPAK_LIST}
 
-# Toggle SSH availability on boot. Options: status | enable | disable
+# Manage SSH availability on boot. Options: status | enable | disable
 [group("network")]
-toggle-ssh ACTION="":
+ssh ACTION="":
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     SSH_STATE="$(systemctl is-enabled sshd 2>/dev/null || true)"
@@ -49,7 +49,7 @@ toggle-ssh ACTION="":
       SSH_STATUS="Enabled"
     fi
     if [ "$OPTION" == "help" ]; then
-      echo "Usage: ujust toggle-ssh <option>"
+      echo "Usage: ujust ssh <option>"
       echo "  <option>: Specify the option to skip the interactive prompt"
       echo "  Use 'enable' to enable SSH on boot"
       echo "  Use 'disable' to disable SSH on boot"
@@ -88,9 +88,9 @@ toggle-ssh ACTION="":
         ;;
     esac
 
-# Toggles REISUB, useful for force rebooting systems when pageflip timeouts and/or other horrible things happen. Options: status | enable | disable
+# Manage REISUB, useful for force rebooting systems when pageflip timeouts and/or other horrible things happen. Options: status | enable | disable
 [group("system")]
-toggle-reisub ACTION="":
+reisub ACTION="":
     #!/usr/bin/bash
     set -euo pipefail
     source /usr/lib/ujust/ujust.sh
@@ -144,6 +144,183 @@ regenerate-grub:
       sudo grub2-mkconfig -o /etc/grub2.cfg
     fi
     remount_boot_ro
+
+# Set GRUB menu timeout and regenerate config. Options: no-timeout | instant | 1-second | 3-seconds | 5-seconds | 10-seconds | custom
+[group("system")]
+grub-timeout ACTION="":
+    #!/usr/bin/bash
+    set -euo pipefail
+    source /usr/libexec/bazzite-boot-remount
+    source /usr/lib/ujust/ujust.sh
+
+    GRUB_FILE="/etc/default/grub"
+    GRUB_FILE_EXISTED="false"
+    GRUB_FILE_BACKUP=""
+    BOOT_REMOUNTED="false"
+
+    print_help() {
+      echo "Usage: ujust grub-timeout <option>"
+      echo "  <option>: Specify the timeout to skip the interactive prompt"
+      echo "  Use 'no-timeout' or '-1' to keep the GRUB menu open until the user makes a choice"
+      echo "  Use 'instant' or '0' to skip the GRUB menu. Menu appears with Shift being held."
+      echo "  Use '1-second', '3-seconds', '5-seconds', or '10-seconds' for common timeouts"
+      echo "  Use 'custom' to enter a custom whole number from 0 to 60 seconds"
+    }
+
+    confirm_existing_grub_file() {
+      local CONFIRM_CHOICE
+      clear
+      echo "${bold}Existing GRUB File${normal}"
+      echo "$GRUB_FILE already exists."
+      echo "Only GRUB_TIMEOUT will be changed temporarily."
+      echo "The GRUB config will be regenerated, then the original file will be restored."
+      echo "The existing file will not be deleted."
+      echo ""
+      CONFIRM_CHOICE=$(ugum choose "Continue" "Exit without changes")
+      if [[ "$CONFIRM_CHOICE" != "Continue" ]]; then
+        echo "No changes made."
+        exit 0
+      fi
+    }
+
+    cleanup() {
+      local EXIT_CODE=$?
+      if [[ "$GRUB_FILE_EXISTED" == "true" && -n "$GRUB_FILE_BACKUP" && -f "$GRUB_FILE_BACKUP" ]]; then
+        echo "Restoring previous $GRUB_FILE..."
+        sudo cp -a "$GRUB_FILE_BACKUP" "$GRUB_FILE" || true
+        sudo rm -f "$GRUB_FILE_BACKUP"
+      else
+        echo "Removing temporary $GRUB_FILE..."
+        sudo rm -f "$GRUB_FILE" || true
+      fi
+
+      if [[ "$BOOT_REMOUNTED" == "true" ]]; then
+        remount_boot_ro || true
+      fi
+
+      exit "$EXIT_CODE"
+    }
+
+    validate_timeout() {
+      local TIMEOUT="$1"
+      if [[ "$TIMEOUT" =~ ^[0-9]+$ ]] && (( TIMEOUT <= 60 )); then
+        return 0
+      fi
+
+      return 1
+    }
+
+    prompt_custom_timeout() {
+      local CUSTOM_TIMEOUT
+      while true; do
+        read -r -p "Enter GRUB timeout in seconds (0-60): " CUSTOM_TIMEOUT || exit 1
+        if validate_timeout "$CUSTOM_TIMEOUT" >/dev/null; then
+          TIMEOUT="$CUSTOM_TIMEOUT"
+          return 0
+        fi
+
+        echo "Please enter a whole number from 0 to 60 seconds." >&2
+      done
+    }
+
+    set_timeout_from_option() {
+      local OPTION_LOWER
+      OPTION_LOWER="$(echo "$1" | tr '[:upper:]' '[:lower:]')"
+
+      case "$OPTION_LOWER" in
+        "no timeout (-1)"|no-timeout|never|-1)
+          TIMEOUT="-1"
+          ;;
+        "skip menu (0 seconds - menu appears with shift being held)"|instant|0)
+          TIMEOUT="0"
+          ;;
+        "1 second"|1-second|1-seconds|1)
+          TIMEOUT="1"
+          ;;
+        "3 seconds"|3-seconds|3-second|3)
+          TIMEOUT="3"
+          ;;
+        "5 seconds"|5-seconds|5-second|5)
+          TIMEOUT="5"
+          ;;
+        "10 seconds"|10-seconds|10-second|10)
+          TIMEOUT="10"
+          ;;
+        "custom timeout"|custom)
+          prompt_custom_timeout
+          ;;
+        help)
+          print_help
+          exit 0
+          ;;
+        "exit without changes"|exit)
+          exit 0
+          ;;
+        *)
+          if [[ "$OPTION_LOWER" == "-1" ]]; then
+            TIMEOUT="-1"
+          elif validate_timeout "$OPTION_LOWER" >/dev/null; then
+            TIMEOUT="$OPTION_LOWER"
+          else
+            echo "Invalid timeout option: $1" >&2
+            print_help
+            exit 1
+          fi
+          ;;
+      esac
+    }
+
+    OPTION="{{ ACTION }}"
+    if [[ -z "$OPTION" ]]; then
+      echo "${bold}GRUB Timeout${normal}"
+      echo "Choose how long GRUB should wait before booting the default entry."
+      echo "This will regenerate the GRUB config."
+      OPTION=$(ugum choose "No Timeout (-1)" "Skip Menu (0 seconds - Menu appears with Shift being held)" "1 Second" "3 Seconds" "5 Seconds" "10 Seconds" "Custom Timeout" "Exit without changes")
+    fi
+
+    TIMEOUT=""
+    set_timeout_from_option "$OPTION"
+
+    if [[ -e "$GRUB_FILE" ]]; then
+      confirm_existing_grub_file
+    fi
+
+    trap cleanup EXIT
+
+    if sudo test -e "$GRUB_FILE"; then
+      GRUB_FILE_EXISTED="true"
+      GRUB_FILE_BACKUP="$(mktemp)"
+      sudo cp -a "$GRUB_FILE" "$GRUB_FILE_BACKUP"
+    fi
+
+    remount_boot_rw
+    BOOT_REMOUNTED="true"
+
+    echo "Writing temporary GRUB_TIMEOUT=$TIMEOUT to $GRUB_FILE..."
+    if sudo test -e "$GRUB_FILE" && sudo grep -q '^GRUB_TIMEOUT=' "$GRUB_FILE"; then
+      sudo sed -i "s/^GRUB_TIMEOUT=.*/GRUB_TIMEOUT=$TIMEOUT/" "$GRUB_FILE"
+    else
+      printf 'GRUB_TIMEOUT=%s\n' "$TIMEOUT" | sudo tee -a "$GRUB_FILE"
+    fi
+
+    echo "Regenerating GRUB config..."
+    if [ -d /sys/firmware/efi ]; then
+      sudo grub2-mkconfig -o /etc/grub2-efi.cfg
+    else
+      sudo grub2-mkconfig -o /etc/grub2.cfg
+    fi
+
+    case "$TIMEOUT" in
+      -1)
+        echo "GRUB timeout has been set to wait until the user makes a choice in the generated config."
+        ;;
+      0)
+        echo "GRUB timeout has been set to skip the menu. Menu appears with Shift being held."
+        ;;
+      *)
+        echo "GRUB timeout has been set to $TIMEOUT seconds in the generated config."
+        ;;
+    esac
 
 # Configure grub bootmenu visibility. Pass action 'help' for more info. Options: hide | unhide | show. Pairing: hide = Hide After Successful Boot | unhide = Same except when Dual Booting | show = Always Show Grub
 [group("system")]
@@ -381,9 +558,9 @@ add-user-to-input-group ACTION="":
     fi
     add_user_to_input_group
 
-# Enables automounting of labeled BTRFS/EXT4 partitions under /run/media/system. Options: status | enable | disable
+# Manage automounting of labeled BTRFS/EXT4 partitions under /run/media/system. Options: status | enable | disable
 [group("automounting")]
-enable-automounting ACTION="":
+automounting ACTION="":
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     get_status_token() {
@@ -420,7 +597,7 @@ enable-automounting ACTION="":
     }
     OPTION="{{ ACTION }}"
     if [[ "$OPTION" == "help" ]]; then
-      echo "Usage: ujust enable-automounting <option>"
+      echo "Usage: ujust automounting <option>"
       echo "  <option>: Specify the quick option to skip the prompt"
       echo "  Use 'status' to print the current portal token"
       echo "  Use 'enable' to enable automounting"
@@ -464,9 +641,9 @@ disable-framework-automount:
     set -eo pipefail
     ln -sf /dev/null /etc/udev/rules.d/99-framework-steam-automount.rules
 
-# Enable SteamOS automount. Options: status | enable | disable
+# Manage SteamOS automount. Options: status | enable | disable
 [group("automounting")]
-enable-steamos-automount ACTION="":
+steamos-automount ACTION="":
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     RULE_FILE="/etc/udev/rules.d/99-steamos-automount.rules"
@@ -492,7 +669,7 @@ enable-steamos-automount ACTION="":
     }
     OPTION="{{ ACTION }}"
     if [[ "$OPTION" == "help" ]]; then
-      echo "Usage: ujust enable-steamos-automount <option>"
+      echo "Usage: ujust steamos-automount <option>"
       echo "  <option>: Specify the quick option to skip the prompt"
       echo "  Use 'status' to print the current portal token"
       echo "  Use 'enable' to enable SteamOS automount"
@@ -525,17 +702,62 @@ enable-steamos-automount ACTION="":
 # Disable all partition automounting. This might increase boot times.
 [group("automounting")]
 disable-automount-all:
-    @pkexec --keep-cwd ujust disable-framework-automount enable-automounting disable enable-steamos-automount disable
+    @pkexec --keep-cwd ujust disable-framework-automount automounting disable steamos-automount disable
 
 # Enable all automounting.
 [group("automounting")]
 enable-automount-all:
-    @pkexec --keep-cwd ujust enable-framework-automount enable-automounting enable-steamos-automount
+    @pkexec --keep-cwd ujust enable-framework-automount automounting enable steamos-automount enable
 
-# Enable support for Tailscale
+# Enable support for Tailscale. Options: status | enable | disable
 [group("network")]
-enable-tailscale:
-    systemctl enable --now tailscaled.service
+tailscale ACTION="":
+    #!/usr/bin/bash
+    source /usr/lib/ujust/ujust.sh
+    TAILSCALE_STATE="$(systemctl is-enabled tailscaled.service 2>/dev/null || true)"
+    get_status_token() {
+      if [[ -z "$TAILSCALE_STATE" ]]; then
+        return 1
+      elif [[ "$TAILSCALE_STATE" == "enabled" ]]; then
+        echo "enable"
+      else
+        echo "disable"
+      fi
+    }
+    get_current_status() {
+      if [[ "$(get_status_token)" == "enable" ]]; then
+        echo "${green}${bold}Enabled${normal}"
+      else
+        echo "${yellow}${bold}Disabled${normal}"
+      fi
+    }
+    OPTION="{{ ACTION }}"
+    if [[ "$OPTION" == "help" ]]; then
+      echo "Usage: ujust tailscale <option>"
+      echo "  <option>: Specify the quick option to skip the prompt"
+      echo "  Use 'status' to print the current portal token"
+      echo "  Use 'enable' to enable Tailscale"
+      echo "  Use 'disable' to disable Tailscale"
+      exit 0
+    elif [[ "$OPTION" == "status" ]]; then
+      get_status_token
+      exit $?
+    elif [[ -z "$OPTION" ]]; then
+      echo "${bold}Tailscale${normal}"
+      echo "Current status: $(get_current_status)"
+      OPTION=$(ugum choose "Enable" "Disable" "Exit without changes")
+    fi
+    case "$OPTION" in
+      Enable|enable)
+        sudo systemctl enable --now tailscaled.service
+        ;;
+      Disable|disable)
+        sudo systemctl disable --now tailscaled.service
+        ;;
+      *)
+        echo "No changes made."
+        ;;
+    esac
 
 # Enable Framework Fan Control
 [group("hardware")]
@@ -791,15 +1013,15 @@ benchmark:
     echo 'Running a 1 minute benchmark ...'
     cd /tmp && stress-ng --matrix 0 -t 1m --times
 
-# toggles password prompt feedback in terminal, where sudo password prompts will display asterisks when enabled. Options: on | off
+# Manage password prompt feedback in terminal, where sudo password prompts will display asterisks when enabled. Options: on | off
 [group("development")]
-toggle-password-feedback ACTION="":
+password-feedback ACTION="":
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     PWFEEDBACK_FILE="/etc/sudoers.d/enable-pwfeedback"
     OPTION={{ ACTION }}
     if [ "$OPTION" = "help" ]; then
-      echo "Usage: ujust toggle-password-feedback <option>"
+      echo "Usage: ujust password-feedback <option>"
       echo "  <option>: Specify the quick option to skip the toggle behavior"
       echo "  Use 'on' to show password asterisks in sudo prompts"
       echo "  Use 'off' to hide password asterisks in sudo prompts"
@@ -833,9 +1055,9 @@ toggle-password-feedback ACTION="":
       echo "enabled, restart terminal to see changes"
     fi
 
-# Toggle global Proton FSR4 upgrade on RDNA4 GPUs; upgrades FSR 3.1+ → FSR 4 on Proton 10 or GE 10-25 or later. Options: enable | disable
+# Manage global Proton FSR4 upgrade on RDNA4 GPUs; upgrades FSR 3.1+ → FSR 4 on Proton 10 or GE 10-25 or later. Options: enable | disable
 [group("gaming")]
-toggle-global-fsr4 ACTION="":
+global-fsr4 ACTION="":
     #!/usr/bin/bash
     set -euo pipefail
     source /usr/lib/ujust/ujust.sh
@@ -873,9 +1095,9 @@ toggle-global-fsr4 ACTION="":
             ;;
     esac
 
-# Toggle global Proton FSR4 upgrade on RDNA3 GPUs; upgrades FSR 3.1+ → FSR 4, only compatible with Proton GE, Proton EM, or similar forks. Options: enable | disable
+# Manage global Proton FSR4 upgrade on RDNA3 GPUs; upgrades FSR 3.1+ → FSR 4, only compatible with Proton GE, Proton EM, or similar forks. Options: enable | disable
 [group("gaming")]
-toggle-global-fsr4-rdna3 ACTION="":
+global-fsr4-rdna3 ACTION="":
     #!/usr/bin/bash
     set -euo pipefail
     source /usr/lib/ujust/ujust.sh
@@ -915,9 +1137,9 @@ toggle-global-fsr4-rdna3 ACTION="":
             ;;
     esac
 
-# Toggle global Proton DLSS upgrade; updates DLSS DLLs for Proton. Options: enable | disable
+# Manage global Proton DLSS upgrade; updates DLSS DLLs for Proton. Options: enable | disable
 [group("gaming")]
-toggle-global-dlss ACTION="":
+global-dlss ACTION="":
     #!/usr/bin/bash
     set -euo pipefail
     source /usr/lib/ujust/ujust.sh
@@ -1008,10 +1230,19 @@ get-logs:
     #!/bin/bash
     set -euo pipefail
     source /usr/lib/ujust/ujust.sh
-    # Get system status information
-    echo -e "${bold}System Information:${normal}"
+    echo -e "${red}${bold}Generating and uploading system information and logs for Bazzite Support...${normal}"
     echo " "
-    rpm-ostree status
+    # Upload system status information
+    system_information=$({
+      echo "rpm-ostree status"
+      echo "-----------------"
+      rpm-ostree status
+      echo
+      echo "fastfetch"
+      echo "---------"
+      \fastfetch --config none --logo none --pipe --structure-disabled colors
+    } | fpaste 2>/dev/null)
+    echo -e "${bold}System Information:${normal} $system_information"
     echo " "
     # Get logs for this boot
     this_boot_logs=$(journalctl -b | fpaste 2>/dev/null)
@@ -1023,11 +1254,9 @@ get-logs:
     echo " "
     # Concatenate all outputs and copy to clipboard
     {
-      echo "System Information:"
-      rpm-ostree status
-      echo
+      echo "System Information: $system_information"
       echo "Logs This Boot: $this_boot_logs"
       echo
       echo "Logs Last Boot: $last_boot_logs"
     } | wl-copy
-    echo -e "${green}All output has been copied to your clipboard.${normal}"
+    echo -e "${lightgreen}${bold}Logs and system information have been uploaded, and the links have been copied to your clipboard.\nPlease provide them to Bazzite Support for further help.${normal}"

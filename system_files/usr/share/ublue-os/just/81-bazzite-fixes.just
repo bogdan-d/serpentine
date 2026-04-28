@@ -6,15 +6,7 @@ alias patch-gmod := fix-gmod
 [group("gaming")]
 fix-gmod:
     #!/usr/bin/bash
-    mkdir -p /tmp/patch-gmod
-    wget \
-      $(curl -s https://api.github.com/repos/solsticegamestudios/GModPatchTool/releases/latest | \
-      jq -r ".assets[] | select(.name | test(\"GModPatchTool-Linux.zip\")) | .browser_download_url") \
-      -P /tmp/patch-gmod
-    cd /tmp/patch-gmod && unzip -q GModPatchTool-Linux.zip
-    chmod +x /tmp/patch-gmod/gmodpatchtool
-    /tmp/patch-gmod/gmodpatchtool
-    rm -rf /tmp/patch-gmod
+    /usr/bin/gmodpatchtool
 
 # Kills all processes related to wine and proton. This forces it to restart next time you launch the game (you might still have to press STOP in steam to kill the game binary)
 [group("gaming")]
@@ -93,8 +85,8 @@ toggle-bt-mic:
       echo "No changes were made."
     fi
 
-# enable or disable wake-on-lan functionality. Options: status | enable | disable | force-enable
-toggle-wol ACTION="":
+# Manage wake-on-lan functionality. Options: status | enable | disable | force-enable
+wol ACTION="":
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     CONFIG_FILE="/etc/udev/rules.d/81-wol.rules"
@@ -124,7 +116,7 @@ toggle-wol ACTION="":
     }
     OPTION="{{ ACTION }}"
     if [ "$OPTION" == "help" ]; then
-      echo "Usage: ujust toggle-wol <option>"
+      echo "Usage: ujust wol <option>"
       echo "  <option>: Specify the quick option to skip the prompt"
       echo "  Use 'enable' to enable Wake-on-LAN"
       echo "  Use 'disable' to disable Wake-on-LAN"
@@ -183,15 +175,15 @@ toggle-wol ACTION="":
       echo "No changes were made."
     fi
 
-# enable or disable IWD as a replacement for wpa_supplicant. Options: status | enable | disable
+# Manage IWD as a replacement for wpa_supplicant. Options: status | enable | disable
 [group("network")]
-toggle-iwd ACTION="":
+iwd ACTION="":
     #!/usr/bin/bash
     get_status_token() {
-      if [[ -f "/etc/NetworkManager/conf.d/supplicant.conf" ]]; then
-        echo "disable"
-      else
+      if [[ -f "/etc/NetworkManager/conf.d/iwd.conf" ]]; then
         echo "enable"
+      else
+        echo "disable"
       fi
     }
 
@@ -201,7 +193,7 @@ toggle-iwd ACTION="":
       exit 0
     fi
     # Explain the purpose of the script
-    echo -e "This script manages enabling or disabling iwd as a replacement for wpa_supplicant for Wi-Fi networking. Default is Enabled."
+    echo -e "This script manages enabling or disabling iwd as a replacement for wpa_supplicant for Wi-Fi networking."
     echo -e "Enabling this can improve throughput, mesh networking, and reduce latency increases when scanning for networks"
     echo -e "Disabling this can improve functionality on some wifi adapters"
     echo -e ""
@@ -217,7 +209,8 @@ toggle-iwd ACTION="":
       nmcli -t -f NAME connection show | while read -r line; do sudo nmcli connection delete "$line"; done
     }
     enable_iwd() {
-      sudo rm -f "/etc/NetworkManager/conf.d/supplicant.conf"
+      sudo rm -f "/etc/NetworkManager/conf.d/iwd.conf"
+      printf "[device]\nwifi.backend=iwd\nwifi.iwd.autoconnect=yes" | sudo tee /etc/NetworkManager/conf.d/iwd.conf > /dev/null
       sudo systemctl mask wpa_supplicant.service
       sudo systemctl unmask iwd.service
       remove_saved_networks
@@ -225,8 +218,7 @@ toggle-iwd ACTION="":
     }
     disable_iwd() {
       sudo mkdir -p "/etc/NetworkManager/conf.d/"
-      sudo rm -f "/etc/NetworkManager/conf.d/supplicant.conf"
-      printf "[device]\nwifi.backend=wpa_supplicant" | sudo tee /etc/NetworkManager/conf.d/supplicant.conf > /dev/null
+      sudo rm -f "/etc/NetworkManager/conf.d/iwd.conf"
       sudo systemctl mask iwd.service
       sudo systemctl unmask wpa_supplicant.service
       remove_saved_networks
@@ -505,8 +497,8 @@ steam-icons ACTION="":
       ;;
     esac
 
-# Toggle CEC_ONSLEEP_STANDBY - Controls whether TV goes to standby when system sleeps. Options: status | enable | disable
-toggle-cec-sleep ACTION="":
+# Manage CEC_ONSLEEP_STANDBY - Controls whether TV goes to standby when system sleeps. Options: status | enable | disable
+cec-sleep ACTION="":
     #!/usr/bin/bash
     source /usr/lib/ujust/ujust.sh
     CONFIG_FILE="/etc/default/cec-control"
@@ -539,7 +531,7 @@ toggle-cec-sleep ACTION="":
     OPTION="{{ ACTION }}"
 
     if [ "$OPTION" == "help" ]; then
-      echo "Usage: ujust toggle-cec-onsleep <option>"
+      echo "Usage: ujust cec-sleep <option>"
       echo "  <option>: Specify the option to skip the interactive prompt"
       echo "  Use 'enable' to make TV standby when system sleeps"
       echo "  Use 'disable' to prevent TV standby when system sleeps"
