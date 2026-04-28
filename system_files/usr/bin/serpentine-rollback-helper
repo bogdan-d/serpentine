@@ -64,9 +64,18 @@ target_de() {
   [[ "$1" == *"gnome"* ]] && echo "GNOME" || echo "KDE/Plasma"
 }
 
+current_signing_scheme=""
 signing_scheme() {
-  local current=$(rpm-ostree status -b --json | jq -r '.deployments[]["container-image-reference"]')
-  [[ "$current" == *"ostree-image-signed"* ]] && echo "ostree-image-signed:docker://ghcr.io" || echo "ostree-unverified-registry:ghcr.io"
+  if [[ -z "$current_signing_scheme" ]]; then
+    local current
+    current=$(rpm-ostree status -b --json | jq -r '.deployments[]["container-image-reference"]')
+    if printf '%s\n' "$current" | grep -q "ostree-image-signed"; then
+      current_signing_scheme="ostree-image-signed:docker://ghcr.io"
+    else
+      current_signing_scheme="ostree-unverified-registry:ghcr.io"
+    fi
+  fi
+  echo "$current_signing_scheme"
 }
 
 warn_if_de_mismatch() {
