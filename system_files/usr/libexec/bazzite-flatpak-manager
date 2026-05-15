@@ -1,7 +1,7 @@
 #!/usr/bin/bash
 
 # Script version
-VER=34
+VER=35
 # Allows to version the manager based on its contents.
 # Bump VER whenever we want to trigger a run explicitly event though the script is not changed.
 SCRIPT_HASH=$(tr -d '[:space:]' <"$0" | sha256sum | cut -d ' ' -f 1)
@@ -147,6 +147,10 @@ rm -f \
 
 /usr/bin/cp -rf /usr/share/serpentine/firefox-config/* /var/lib/flatpak/extension/org.mozilla.firefox.systemconfig/x86_64/stable/defaults/pref/
 /usr/bin/cp -rf /usr/share/serpentine/zen-config/* /var/lib/flatpak/extension/app.zen_browser.zen.systemconfig/x86_64/stable/defaults/pref/
+
+# Unpin known runtimes added by older ISOs and remove unused runtimes
+xargs -L 1 -a /usr/share/ublue-os/bazzite-flatpak-eol flatpak pin --system --remove &>/dev/null || :
+flatpak uninstall --system --unused --assumeyes || :
 
 mkdir -p /etc/bazzite
 echo "$VER" > "$VER_FILE"
