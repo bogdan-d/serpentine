@@ -66,13 +66,32 @@ INSTALL_FEDORA_PACKAGES=(
     corectrl
     dbus-x11
     flatpak-builder
+    # especially for brew
+    gcc{,-c++}
+    git-credential-libsecret
     git-subtree
     # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
-    gvfs
-    gvfs-fuse
+    gvfs{,-fuse}
+    icoutils
+    ifuse
+    igt-gpu-tools
     iotop
     iwd
+    input-remapper
     just
+    kcm-fcitx5
+    krb5-workstation
+    ksshaskpass
+    ksystemlog
+    libavcodec
+    libcamera-gstreamer
+    libcamera-tools
+    libfdk-aac
+    libimobiledevice-utils
+    libratbag-ratbagd
+    libxcrypt-compat
+    lm_sensors
+    lshw
     nicstat
     numactl
     osbuild-selinux
@@ -84,11 +103,17 @@ INSTALL_FEDORA_PACKAGES=(
     powerstat
     powertop
     # python3-ramalama
-    restic
     rclone
+    restic
+    solaar-udev
+    squashfs-tools
+    symlinks
     sysprof
+    tcpdump
     tiptop
+    tmux
     trace-cmd
+    traceroute
     udev-hid-bpf
     udev-hid-bpf-stable
     udica
