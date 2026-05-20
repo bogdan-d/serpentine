@@ -6,7 +6,6 @@ if rpm -q docker-ce >/dev/null; then
     systemctl enable docker.socket
 fi
 systemctl enable podman.socket
-systemctl enable swtpm-workaround.service
 systemctl enable ublue-system-setup.service
 systemctl --global enable ublue-user-setup.service
 systemctl enable ublue-os-libvirt-workarounds.service
@@ -29,7 +28,3 @@ touch /etc/sysconfig/firewalld
 # Remove the argument if it already exists in the base image, then append our override
 sed -i '/^FIREWALLD_ARGS=/d' /etc/sysconfig/firewalld
 echo 'FIREWALLD_ARGS="--log-target=syslog"' >> /etc/sysconfig/firewalld
-
-# Remove bazzite/system_files/desktop/kinoite/usr/lib/systemd/system/sddm.service.d/override.conf
-# It adds ~30s to the boot time
-rm -f /usr/lib/systemd/system/sddm.service.d/override.conf
