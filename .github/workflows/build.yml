@@ -385,11 +385,6 @@ jobs:
           version: ${{ steps.version.outputs.version_tag }}
           labels: ${{ steps.labels.outputs.labels }} # Rechunk strips out all the labels during build, this needs to be reapplied here with newline separator
 
-      - name: Clean rechunker temp data
-        if: always()
-        run: |
-          sudo rm -rf ${{ steps.rechunk.outputs.location }}
-
       # These `if` statements are so that pull requests for your custom images do not make it publish any packages under your name without you knowing
       # They also check if the runner is on the default branch so that things like the merge queue (if you enable it), are going to work
       - name: Login to GitHub Container Registry
@@ -496,6 +491,15 @@ jobs:
           subject-name: ${{ steps.image_vars.outputs.output_image }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
+
+      - name: Clean rechunker temp data
+        if: always()
+        env:
+          RECHUNK_LOCATION: ${{ steps.rechunk.outputs.location }}
+        run: |
+          if [ -n "${RECHUNK_LOCATION}" ]; then
+            sudo rm -rf "${RECHUNK_LOCATION}"
+          fi
 
   check:
     name: Check all builds successful
