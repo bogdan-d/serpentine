@@ -23,6 +23,7 @@ on:
       - '**/LICENSE'
       - '**/README.md'
       - '**/SETUP.md'
+  merge_group:
   workflow_dispatch:
 
 permissions: {}
@@ -31,7 +32,6 @@ env:
   IMAGE_DESC: "${{ github.event.repository.description }}"
   IMAGE_KEYWORDS: "bootc,ublue,universal-blue,bazzite,serpentine"
   IMAGE_LOGO_URL: "https://avatars.githubusercontent.com/u/4302588?s=200&v=4"  # Put your own image here for a fancy profile on https://artifacthub.io/!
-  IMAGE_NAME: "${{ github.event.repository.name }}"  # output image name, usually same as repo name
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"  # do not edit
   # The tag used in the image from which we base of.
   # ex.: ghcr.io/org/image:IMAGE_SOURCE_TAG
@@ -39,9 +39,10 @@ env:
   SOURCE_ORG: "ublue-os"
   SOURCE_REPO: "bazzite"
   DEFAULT_TAG: "latest"
+  REPO_OWNER: "${{ github.repository_owner }}"
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ github.event.inputs.brand_name || '' }}-${{ github.event.inputs.stream_name || '' }}
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
@@ -71,15 +72,18 @@ jobs:
       artifact-metadata: write
 
     steps:
-      - name: Prepare environment
-        run: |
-          # Lowercase the image uri
-          echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
-          echo "IMAGE_NAME=${IMAGE_NAME,,}" >> ${GITHUB_ENV}
-
       # These stage versions are pinned by https://github.com/renovatebot/renovate
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v5
+
+      - name: Check Just syntax
+        run: |
+          if ! command -v just >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y just
+          fi
+
+          just check
 
       # QUICK CLEANUP: reclaim common caches and large SDKs before heavy pulls
       - name: Quick runner cleanup & report
@@ -144,6 +148,27 @@ jobs:
           target-dir: /var/lib/containers
           mount-opts: compress-force=zstd:2
 
+      - name: Get lower-case repo owner
+        id: repo_owner_case
+        run: echo "lowercase=${REPO_OWNER,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Define image variables
+        id: image_vars
+        env:
+          BASE_IMAGE: ${{ matrix.base_image }}
+        run: |
+          IMAGE_NAME="${BASE_IMAGE/bazzite/serpentine}"
+          IMAGE_NAME="${IMAGE_NAME/-deck/}"
+          IMAGE_NAME="${IMAGE_NAME,,}"
+
+          SOURCE_IMAGE="ghcr.io/${SOURCE_ORG}/${BASE_IMAGE}:${IMAGE_SOURCE_TAG}"
+          OUTPUT_IMAGE="ghcr.io/${{ steps.repo_owner_case.outputs.lowercase }}/${IMAGE_NAME}"
+
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+          echo "source_image=${SOURCE_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "output_image=${OUTPUT_IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "prev_ref=${OUTPUT_IMAGE}:${DEFAULT_TAG}" >> "$GITHUB_OUTPUT"
+
       - name: Get current date
         id: date
         run: |
@@ -160,10 +185,12 @@ jobs:
       - name: Get image major version
         id: fetch_source_meta
         env:
-          org: ${{ env.SOURCE_ORG }}
-          IMAGE_SOURCE_TAG: ${{ env.IMAGE_SOURCE_TAG || 'latest' }}
+          SOURCE_IMAGE: ${{ steps.image_vars.outputs.source_image }}
         run: |
-          set -x
+          set -euo pipefail
+
+          sudo podman pull "${SOURCE_IMAGE}"
+
           # SOURCE_VERSION_MAJOR must be a number
           declare -i SOURCE_VERSION_MAJOR=0
 
@@ -172,11 +199,11 @@ jobs:
 
           SOURCE_VERSION=$(
                 skopeo inspect --no-tags --raw --config \
-                "docker://ghcr.io/${org}/${BASE_IMAGE}:${IMAGE_SOURCE_TAG}" | \
+                "docker://${SOURCE_IMAGE}" | \
                 jq -r '.config.Labels["org.opencontainers.image.version"]'
           )
-          if [[ -z $SOURCE_VERSION ]]; then
-            echo "::error::$SOURCE_VERSION was not fetched correctly: $SOURCE_VERSION=${$SOURCE_VERSION}"
+          if [[ -z "$SOURCE_VERSION" || "$SOURCE_VERSION" == "null" ]]; then
+            echo "::error::SOURCE_VERSION was not fetched correctly: ${SOURCE_VERSION}"
             exit 1
           fi
           echo "SOURCE_VERSION=$SOURCE_VERSION" >>$GITHUB_OUTPUT
@@ -192,22 +219,22 @@ jobs:
 
           echo "SOURCE_VERSION_MAJOR=$SOURCE_VERSION_MAJOR" >>$GITHUB_OUTPUT
 
-      - name: Generate output image ref
-        id: gen_image_ref
-        run: |
-          echo "IMAGE_NAME=${BASE_IMAGE/bazzite/serpentine}" | sed 's/-deck//' | tee -a "$GITHUB_ENV"
       ## END:FROM BAZZITE-DX
 
-      - name: Compute daily version tag
-        id: daily_tag
+      - name: Compute version tags
+        id: version
         env:
           MAJOR: ${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}
+          OUTPUT_IMAGE: ${{ steps.image_vars.outputs.output_image }}
+          SOURCE_VERSION: ${{ steps.fetch_source_meta.outputs.SOURCE_VERSION }}
         run: |
+          set -euo pipefail
+
           TODAY=$(date -u +%Y%m%d)
           BASE_TAG="${MAJOR}.${TODAY}"
 
           # Try to list existing tags; if the image doesn't exist yet, default to first build
-          EXISTING_TAGS=$(skopeo list-tags "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}" 2>/dev/null | jq -r '.Tags[]' 2>/dev/null || echo "")
+          EXISTING_TAGS=$(skopeo list-tags "docker://${OUTPUT_IMAGE}" 2>/dev/null | jq -r '.Tags[]' 2>/dev/null || echo "")
 
           # Find highest counter for today's date pattern
           COUNTER=0
@@ -223,61 +250,64 @@ jobs:
           done
 
           if (( COUNTER == 0 )); then
-            VERSION_SUFFIX="${TODAY}"
+            VERSION_TAG="${BASE_TAG}"
           else
-            VERSION_SUFFIX="${TODAY}.${COUNTER}"
+            VERSION_TAG="${BASE_TAG}.${COUNTER}"
           fi
 
-          echo "suffix=${VERSION_SUFFIX}" >> $GITHUB_OUTPUT
-          echo "Daily version suffix: ${VERSION_SUFFIX}"
+          {
+            echo "version_tag=${VERSION_TAG}"
+            echo "pretty_version=Stable (${SOURCE_VERSION})"
+            echo "alias_tags<<EOF"
+            printf '%s\n' \
+              latest \
+              stable \
+              "stable-${MAJOR}" \
+              "stable-${VERSION_TAG}" \
+              "${MAJOR}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
-      # Image metadata for https://artifacthub.io/ - This is optional but is highly recommended so we all can get a index of all the custom images
-      # The metadata by itself is not going to do anything, you choose if you want your image to be on ArtifactHub or not.
-      - name: Image Metadata
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
-        id: metadata
-        with:
-          # This generates all the tags for your image, you can add custom tags here too!
-          # Default tags are "$DEFAULT_TAG" and "$DEFAULT_TAG.$date".
-          tags: |
-            type=raw,value=latest
-            type=raw,value=stable
-            type=raw,value=stable-${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}
-            type=raw,value=stable-${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}.${{ steps.daily_tag.outputs.suffix }}
-            type=raw,value=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}
-            type=raw,value=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION_MAJOR }}.${{ steps.daily_tag.outputs.suffix }}
-            type=sha,enable=${{ github.event_name == 'pull_request' }}
-            type=ref,event=pr
-          labels: |
-            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
-            org.opencontainers.image.created=${{ steps.date.outputs.date }}
-            org.opencontainers.image.description=${{ env.IMAGE_DESC }}
-            org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile
-            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.url=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/tree/${{ github.sha }}
-            org.opencontainers.image.vendor=${{ github.repository_owner }}
-            org.opencontainers.image.version=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION }}
-            io.artifacthub.package.deprecated=false
-            io.artifacthub.package.keywords=${{ env.IMAGE_KEYWORDS }}
-            io.artifacthub.package.license=Apache-2.0
-            io.artifacthub.package.logo-url=${{ env.IMAGE_LOGO_URL }}
-            io.artifacthub.package.prerelease=false
-            containers.bootc=1
-          sep-tags: " "
-          sep-annotations: " "
+          echo "Primary version tag: ${VERSION_TAG}"
+
+      - name: Build image labels
+        id: labels
+        env:
+          IMAGE_NAME: ${{ steps.image_vars.outputs.image_name }}
+          SOURCE_IMAGE: ${{ steps.image_vars.outputs.source_image }}
+        run: |
+          {
+            echo "labels<<EOF"
+            printf '%s\n' \
+              "io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/README.md" \
+              "org.opencontainers.image.created=${{ steps.date.outputs.date }}" \
+              "org.opencontainers.image.description=${{ env.IMAGE_DESC }}" \
+              "org.opencontainers.image.documentation=https://raw.githubusercontent.com/${{ github.repository }}/${{ github.sha }}/README.md" \
+              "org.opencontainers.image.source=https://github.com/${{ github.repository }}" \
+              "org.opencontainers.image.title=${IMAGE_NAME}" \
+              "org.opencontainers.image.url=https://github.com/${{ github.repository }}/tree/${{ github.sha }}" \
+              "org.opencontainers.image.vendor=${{ github.repository_owner }}" \
+              "org.opencontainers.image.version=${{ steps.version.outputs.version_tag }}" \
+              "org.opencontainers.image.revision=${{ github.sha }}" \
+              "org.opencontainers.image.base.name=${SOURCE_IMAGE}" \
+              "org.opencontainers.image.base.version=${{ steps.fetch_source_meta.outputs.SOURCE_VERSION }}" \
+              "io.artifacthub.package.deprecated=false" \
+              "io.artifacthub.package.keywords=${{ env.IMAGE_KEYWORDS }}" \
+              "io.artifacthub.package.license=Apache-2.0" \
+              "io.artifacthub.package.logo-url=${{ env.IMAGE_LOGO_URL }}" \
+              "io.artifacthub.package.prerelease=false" \
+              "containers.bootc=1"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build Image
         id: build_image
         env:
-          TAGS: ${{ steps.metadata.outputs.tags }}
-          LABELS: ${{ steps.metadata.outputs.labels }}
+          IMAGE_NAME: ${{ steps.image_vars.outputs.image_name }}
+          SOURCE_IMAGE: ${{ steps.image_vars.outputs.source_image }}
+          LABELS: ${{ steps.labels.outputs.labels }}
         run: |
-          # Construct tag arguments (tags are space-separated from metadata action)
-          TAG_ARGS=()
-          for tag in ${TAGS}; do
-            TAG_ARGS+=(--tag "localhost/${IMAGE_NAME}:${tag}")
-          done
+          set -euo pipefail
 
           # Construct label arguments (labels are newline-separated key=value pairs)
           LABEL_ARGS=()
@@ -286,12 +316,13 @@ jobs:
           done <<< "${LABELS}"
 
           sudo podman build \
+            --pull=always \
             --file ./Containerfile \
             --format docker \
-            --build-arg "BASE_IMAGE=ghcr.io/${{ env.SOURCE_ORG }}/${{ matrix.base_image }}:${{ env.IMAGE_SOURCE_TAG || 'latest' }}" \
-            --build-arg "IMAGE_NAME=${{ env.IMAGE_NAME }}" \
-            --build-arg "IMAGE_VENDOR=${{ github.repository_owner }}" \
-            "${TAG_ARGS[@]}" \
+            --build-arg "BASE_IMAGE=${SOURCE_IMAGE}" \
+            --build-arg "IMAGE_NAME=${IMAGE_NAME}" \
+            --build-arg "IMAGE_VENDOR=${{ steps.repo_owner_case.outputs.lowercase }}" \
+            --tag "localhost/${IMAGE_NAME}:${DEFAULT_TAG}" \
             "${LABEL_ARGS[@]}" \
             .
 
@@ -306,7 +337,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: generate-sbom
         env:
-          IMAGE: ${{ env.IMAGE_NAME }}
+          IMAGE: ${{ steps.image_vars.outputs.image_name }}
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
           OCI_DIR: "/tmp/image-oci-dir"
         run: |
@@ -331,58 +362,58 @@ jobs:
         uses: ublue-os/legacy-rechunk@a925083d9af7cb04b3e2a6e8c01bfa495f38b710 # v1.0.0
         with:
           rechunk: 'ghcr.io/ublue-os/legacy-rechunk:v1.0.0-x86_64'
-          ref: "localhost/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}"
-          prev-ref: "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}"
+          ref: "localhost/${{ steps.image_vars.outputs.image_name }}:${{ env.DEFAULT_TAG }}"
+          prev-ref: "${{ steps.image_vars.outputs.prev_ref }}"
           skip_compression: true
-          version: ${{ steps.fetch_source_meta.outputs.SOURCE_VERSION }}
-          labels: ${{ steps.metadata.outputs.labels }} # Rechunk strips out all the labels during build, this needs to be reapplied here with newline separator
+          version: ${{ steps.version.outputs.version_tag }}
+          labels: ${{ steps.labels.outputs.labels }} # Rechunk strips out all the labels during build, this needs to be reapplied here with newline separator
 
-      # This is necessary so that the podman socket can find the rechunked image on its storage
-      - name: Load in podman and tag
+      - name: Clean rechunker temp data
+        if: always()
         run: |
-          IMAGE=$(podman pull ${{ steps.rechunk.outputs.ref }})
           sudo rm -rf ${{ steps.rechunk.outputs.location }}
-          for tag in ${{ steps.metadata.outputs.tags }}; do
-            podman tag $IMAGE ${{ env.IMAGE_NAME }}:$tag
-          done
-
-      ## BEGIN:FROM BAZZITE-DX
-      # Workaround bug where capital letters in your GitHub username make it impossible to push to GHCR.
-      # https://github.com/macbre/push-to-ghcr/issues/12
-      - name: Lowercase Image and Registry
-        id: lowercase
-        env:
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-        run: |
-          set -x
-          echo "registry=${IMAGE_REGISTRY,,}" >> $GITHUB_OUTPUT
-          echo "image=${IMAGE_NAME,,}" >> $GITHUB_OUTPUT
-      ## END:FROM BAZZITE-DX
 
       # These `if` statements are so that pull requests for your custom images do not make it publish any packages under your name without you knowing
       # They also check if the runner is on the default branch so that things like the merge queue (if you enable it), are going to work
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | sudo podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push To GHCR
-        uses: redhat-actions/push-to-registry@5ed88d269cf581ea9ef6dd6806d01562096bee9c # v2
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: push
         env:
-          REGISTRY_USER: ${{ github.actor }}
-          REGISTRY_PASSWORD: ${{ github.token }}
+          OUTPUT_IMAGE: ${{ steps.image_vars.outputs.output_image }}
+          RECHUNK_REF: ${{ steps.rechunk.outputs.ref }}
+          VERSION_TAG: ${{ steps.version.outputs.version_tag }}
+          ALIAS_TAGS: ${{ steps.version.outputs.alias_tags }}
+        uses: nick-fields/retry@ad984534de44a9489a53aefd81eb77f87c70dc60 # v4.0.0
         with:
-          registry: ${{ steps.lowercase.outputs.registry }}
-          image: ${{ steps.lowercase.outputs.image }}
-          tags: ${{ steps.metadata.outputs.tags }}
-          username: ${{ env.REGISTRY_USER }}
-          password: ${{ env.REGISTRY_PASSWORD }}
+          max_attempts: 3
+          retry_wait_seconds: 15
+          timeout_minutes: 15
+          command: |
+            set -euo pipefail
+
+            log_sum() { echo "$1" >> "$GITHUB_STEP_SUMMARY"; }
+            log_sum '# Push to GHCR result'
+            log_sum '```'
+
+            primary_image="${OUTPUT_IMAGE}:${VERSION_TAG}"
+            sudo skopeo copy "${RECHUNK_REF}" "docker://${primary_image}"
+            log_sum "${primary_image}"
+
+            for tag in ${ALIAS_TAGS}; do
+              dest_image="${OUTPUT_IMAGE}:${tag}"
+              sudo skopeo copy "${RECHUNK_REF}" "docker://${dest_image}"
+              log_sum "${dest_image}"
+            done
+
+            log_sum '```'
+
+            digest=$(sudo skopeo inspect --format '{{.Digest}}' "docker://${primary_image}")
+            echo "digest=${digest}" >> "$GITHUB_OUTPUT"
 
       # This section is optional and only needs to be enabled if you plan on distributing
       # your project for others to consume. You will need to create a public and private key
@@ -397,17 +428,12 @@ jobs:
       - name: Sign container image
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
-          LOWERCASE_REGISTRY: ${{ steps.lowercase.outputs.registry }}
-          LOWERCASE_IMAGE: ${{ steps.lowercase.outputs.image }}
-          TAGS_TO_SIGN: ${{ steps.metadata.outputs.tags }}
-          TAGS: ${{ steps.push.outputs.digest }}
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+          OUTPUT_IMAGE: ${{ steps.image_vars.outputs.output_image }}
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
-          IMAGE_FULL="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}"
-          for tag in ${{ steps.metadata.outputs.tags }}; do
-            cosign sign -y --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false $IMAGE_FULL:$tag
-          done
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false ${OUTPUT_IMAGE}@${DIGEST}
 
       - name: Install ORAS
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
@@ -422,7 +448,7 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: upload-sbom
         env:
-          IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          IMAGE: ${{ steps.image_vars.outputs.output_image }}
           DIGEST: ${{ steps.push.outputs.digest }}
           SBOM: ${{ steps.generate-sbom.outputs.SBOM }}
         run: |
@@ -441,11 +467,18 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          LOWERCASE_REGISTRY: ${{ steps.lowercase.outputs.registry }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE: ${{ steps.image_vars.outputs.output_image }}
           SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
         run: |
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false ${LOWERCASE_REGISTRY}/${IMAGE_NAME}@${SBOM_DIGEST}
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY --new-bundle-format=false ${IMAGE}@${SBOM_DIGEST}
+
+      - name: Attestation
+        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/attest@59d89421af93a897026c735860bf21b6eb4f7b26 # v4.1.0
+        with:
+          subject-name: ${{ steps.image_vars.outputs.output_image }}
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
 
   check:
     name: Check all builds successful
