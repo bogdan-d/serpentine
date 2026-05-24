@@ -192,10 +192,11 @@ From previous \`{target}\` version \`{prev}\` there have been the following chan
 ### Major packages
 | Name | Version |
 | --- | --- |
-| **Kernel** | {pkgrel:kernel} |
+| **Kernel** | {pkgrel:kernel-core} |
 | **Firmware** | {pkgrel:atheros-firmware} |
 | **Mesa** | {pkgrel:mesa-filesystem} |
-| **Gamescope** | {pkgrel:gamescope} |
+| **Gamescope** | {pkgrel:terra-gamescope} |
+| **Bazaar** | {pkgrel:bazaar} |
 | **KDE** | {pkgrel:plasma-desktop} |
 | **Podman** | {pkgrel:podman} |
 | **Docker** | {pkgrel:docker} |
@@ -220,18 +221,31 @@ const HANDWRITTEN_PLACEHOLDER = `This is an automatically generated changelog fo
 /** Packages to exclude from detailed changelog to avoid redundancy */
 const BLACKLIST_VERSIONS = [
   "kernel",
+  "kernel-core",
   "mesa-filesystem",
   "gamescope",
+  "terra-gamescope",
+  "gamescope-session",
   "plasma-desktop",
+  "plasma-workspace",
   "atheros-firmware",
   "podman",
   "docker-ce",
   "nvidia-driver",
   "rocm-runtime",
+  "bazaar",
 ];
 
-const PKG_ALIAS: Record<string, string> = {
-  "docker-ce": "docker",
+const MAJOR_PACKAGE_KEYS: Record<string, string[]> = {
+  "kernel-core": ["kernel-core"],
+  "atheros-firmware": ["atheros-firmware"],
+  "mesa-filesystem": ["mesa-filesystem"],
+  "terra-gamescope": ["terra-gamescope", "gamescope", "gamescope-session"],
+  "bazaar": ["bazaar"],
+  "plasma-desktop": ["plasma-desktop", "plasma-workspace"],
+  "podman": ["podman"],
+  "docker": ["docker-ce", "docker"],
+  "rocm-runtime": ["rocm-runtime"],
 };
 
 // ============================================================================
@@ -302,6 +316,70 @@ function compareVersionTags(a: string, b: string): number {
     if (aVal !== bVal) return aVal - bVal;
   }
   return 0;
+}
+
+/**
+ * Tokenizes an RPM-ish version string into numeric and text segments.
+ * Good enough for changelog/package selection without depending on rpm tooling.
+ */
+function tokenizePackageVersion(version: string): Array<number | string> {
+  return version
+    .replace(EPOCH_PATTERN, "")
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map((part) => (/^\d+$/.test(part) ? Number(part) : part.toLowerCase()));
+}
+
+/**
+ * Compares package versions and returns a positive number when `a` is newer than `b`.
+ */
+export function comparePackageVersions(a: string, b: string): number {
+  const aTokens = tokenizePackageVersion(a);
+  const bTokens = tokenizePackageVersion(b);
+
+  for (let i = 0; i < Math.max(aTokens.length, bTokens.length); i++) {
+    const aPart = aTokens[i];
+    const bPart = bTokens[i];
+
+    if (aPart === undefined) return -1;
+    if (bPart === undefined) return 1;
+    if (aPart === bPart) continue;
+
+    if (typeof aPart === "number" && typeof bPart === "number") {
+      return aPart - bPart;
+    }
+    if (typeof aPart === "number") return 1;
+    if (typeof bPart === "number") return -1;
+
+    const cmp = aPart.localeCompare(bPart, undefined, { numeric: true, sensitivity: "base" });
+    if (cmp !== 0) return cmp;
+  }
+
+  const aHasEpoch = a.includes(":");
+  const bHasEpoch = b.includes(":");
+  if (aHasEpoch !== bHasEpoch) {
+    return aHasEpoch ? 1 : -1;
+  }
+
+  return 0;
+}
+
+/**
+ * Chooses better version between current and candidate duplicates in SBOM output.
+ */
+function shouldReplacePackageVersion(current: string, candidate: string): boolean {
+  const versionCmp = comparePackageVersions(candidate, current);
+  if (versionCmp !== 0) {
+    return versionCmp > 0;
+  }
+
+  const candidateHasEpoch = candidate.includes(":");
+  const currentHasEpoch = current.includes(":");
+  if (candidateHasEpoch !== currentHasEpoch) {
+    return candidateHasEpoch;
+  }
+
+  return false;
 }
 
 /**
@@ -469,8 +547,8 @@ export function parseSbomPackages(sbom: SbomDocument): PackageInfo {
     const version = artifact.version;
     if (!name || !version) continue;
 
-    // If we see the same package, keep the one with epoch (more specific)
-    if (!(name in packages) || (version.includes(":") && !packages[name].includes(":"))) {
+    // Syft may emit multiple RPM artifacts for same package name; keep best/newest one.
+    if (!(name in packages) || shouldReplacePackageVersion(packages[name], version)) {
       packages[name] = version;
     }
   }
@@ -628,11 +706,18 @@ async function getPackageGroups(
 function getVersionsFromPackages(packages: ImagePackages): Record<string, string> {
   const versions: Record<string, string> = {};
 
-  for (const imgPkgs of Object.values(packages)) {
+  for (const [img, imgPkgs] of Object.entries(packages)) {
     for (const [pkg, v] of Object.entries(imgPkgs)) {
+      const versionKey = img.includes("nvidia") && pkg.includes("nvidia") && !img.includes("nvidia-open")
+        ? `${pkg}-lts`
+        : pkg;
+
       let cleaned = v.replace(EPOCH_PATTERN, "");
       cleaned = cleaned.replace(FEDORA_PATTERN, "");
-      versions[pkg] = cleaned;
+
+      if (!(versionKey in versions) || comparePackageVersions(cleaned, versions[versionKey]) > 0) {
+        versions[versionKey] = cleaned;
+      }
     }
   }
 
@@ -672,6 +757,9 @@ function calculateChanges(
   for (const pkg of pkgs) {
     // Clearup changelog by removing mentioned packages
     if (BLACKLIST_VERSIONS.includes(pkg)) {
+      continue;
+    }
+    if (pkg.endsWith("-lts")) {
       continue;
     }
     if (curr[pkg] !== undefined && blacklistVer.has(curr[pkg])) {
@@ -833,21 +921,31 @@ async function generateChangelog(
     .replace(/\{prev\}/g, prev)
     .replace(/\{curr\}/g, curr);
 
-  // Replace major package version placeholders
-  for (const [pkg, v] of Object.entries(versions)) {
-    const templateKey = PKG_ALIAS[pkg] || pkg;
-    if (!prevVersions[pkg] || prevVersions[pkg] === v) {
+  // Replace major package version placeholders using preferred package keys.
+  for (const [templateKey, candidates] of Object.entries(MAJOR_PACKAGE_KEYS)) {
+    const currentPkg = candidates.find((pkg) => pkg in versions);
+    if (!currentPkg) {
+      continue;
+    }
+
+    const previousPkg = candidates.find((pkg) => pkg in prevVersions);
+    const currentVersion = versions[currentPkg];
+    const previousVersion = previousPkg ? prevVersions[previousPkg] : undefined;
+
+    if (!previousVersion || previousVersion === currentVersion) {
       changelog = changelog.replace(
         `{pkgrel:${templateKey}}`,
-        PATTERN_PKGREL.replace("{version}", v)
+        PATTERN_PKGREL.replace("{version}", currentVersion)
       );
     } else {
       changelog = changelog.replace(
         `{pkgrel:${templateKey}}`,
-        PATTERN_PKGREL_CHANGED.replace("{prev}", prevVersions[pkg]).replace("{new}", v)
+        PATTERN_PKGREL_CHANGED.replace("{prev}", previousVersion).replace("{new}", currentVersion)
       );
     }
   }
+
+  changelog = changelog.replace(/\{pkgrel:[^}]+\}/g, "N/A");
 
   // Build all changelog sections
   let changes = "";
