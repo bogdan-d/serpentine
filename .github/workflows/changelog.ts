@@ -383,7 +383,7 @@ function shouldReplacePackageVersion(current: string, candidate: string): boolea
 }
 
 /**
- * Extracts version tags from manifests, finding current and previous versions
+ * Extracts sorted common version tags from manifests
  *
  * Analyzes the RepoTags from manifests to identify the two most recent version tags
  * that match the target pattern. For 'stable', matches tags like '43.20251107'.
@@ -393,14 +393,14 @@ function shouldReplacePackageVersion(current: string, candidate: string): boolea
  *
  * @param target - The target branch/tag (e.g., 'stable', 'testing')
  * @param manifests - Mapping of image manifests containing RepoTags
- * @returns Tuple containing [previousTag, currentTag] in chronological order
+ * @returns Sorted common tags in chronological order
  * @throws Error if fewer than 2 common tags are found
  *
  * @example
- * getTags('stable', manifests)
- * // Returns: ['43.20251106', '43.20251107']
+ * getSortedTags('stable', manifests)
+ * // Returns: ['43.20251105', '43.20251106', '43.20251107']
  */
-function getTags(target: string, manifests: Record<string, Manifest>): [string, string] {
+function getSortedTags(target: string, manifests: Record<string, Manifest>): string[] {
   const tags = new Set<string>();
 
   // Select first manifest to get reference tags from
@@ -438,7 +438,62 @@ function getTags(target: string, manifests: Record<string, Manifest>): [string, 
     throw new Error("No current and previous tags found");
   }
 
-  return [sortedTags[sortedTags.length - 2], sortedTags[sortedTags.length - 1]];
+  return sortedTags;
+}
+
+/**
+ * Checks whether an image tag has an attached SBOM referrer.
+ * Failed builds may push image tags before SBOM upload/release creation finishes,
+ * which makes those tags poor changelog baselines.
+ */
+async function hasSbomReferrer(image: string, tag: string): Promise<boolean> {
+  try {
+    const digest = await getImageDigest(image, tag);
+    const fullRef = `${image}@${digest}`;
+    const discovered = JSON.parse(
+      await Bun.$`oras discover --format json ${fullRef}`.text()
+    );
+
+    return (discovered.referrers || []).some((referrer: { artifactType?: string; }) =>
+      (referrer.artifactType || "").includes("spdx+json")
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Finds current and previous comparable tags.
+ * Prefers previous tag with SBOMs for all images so release notes do not diff
+ * against partially published failed builds.
+ */
+async function getTags(target: string, manifests: Record<string, Manifest>): Promise<[string, string]> {
+  const sortedTags = getSortedTags(target, manifests);
+  const currentTag = sortedTags[sortedTags.length - 1];
+
+  for (let i = sortedTags.length - 2; i >= 0; i--) {
+    const candidateTag = sortedTags[i];
+    let complete = true;
+
+    for (const { img } of getImages()) {
+      const image = `ghcr.io/${AUTHOR}/${img}`;
+      if (!(await hasSbomReferrer(image, candidateTag))) {
+        complete = false;
+        console.log(
+          `Skipping ${candidateTag} as previous tag because ${img} is missing an SBOM referrer.`
+        );
+        break;
+      }
+    }
+
+    if (complete) {
+      return [candidateTag, currentTag];
+    }
+  }
+
+  const fallbackTag = sortedTags[sortedTags.length - 2];
+  console.log(`No SBOM-complete previous tag found; falling back to ${fallbackTag}.`);
+  return [fallbackTag, currentTag];
 }
 
 /**
@@ -1037,7 +1092,7 @@ async function main(): Promise<void> {
   // Fetch current Serpentine manifests
   console.log(`\n=== Fetching Serpentine ${finalTarget} manifests ===`);
   const manifests = await getManifests(finalTarget);
-  const [prev, curr] = getTags(finalTarget, manifests);
+  const [prev, curr] = await getTags(finalTarget, manifests);
   console.log(`Previous tag: ${prev}`);
   console.log(` Current tag: ${curr}`);
 
