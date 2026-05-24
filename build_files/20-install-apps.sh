@@ -137,6 +137,7 @@ INSTALL_AMD_ONLY_PACKAGES=(
     rocm-opencl
     rocm-runtime
     rocm-smi # may only just need this
+    rocminfo
 )
 
 INSTALL_NVIDIA_ONLY_PACKAGES=(
