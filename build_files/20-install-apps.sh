@@ -45,6 +45,7 @@ echo "iptable_nat" > /usr/lib/modules-load.d/iptable_nat.conf
 INSTALL_FEDORA_PACKAGES=(
     android-tools
     bcc
+    bcvk
     bpftop
     bpftrace
     ccache
@@ -240,7 +241,6 @@ fi
 # Install COPR packages with isolated repo enablement
 echo "Installing DX COPR packages with isolated repo enablement..."
 copr_install_isolated "karmab/kcli" "kcli"
-copr_install_isolated "gmaglione/podman-bootc" "podman-bootc"
 # This service sets up various ublue-os features at boot
 # Such as running scripts from system_files/usr/share/ublue-os/privileged-setup.hooks.d
 # and system_files/usr/share/ublue-os/user-setup.hooks.d

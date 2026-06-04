@@ -43,7 +43,7 @@ Comprehensive development environment with:
 *   **Containers & Orchestration:** Docker CE, Podman, Incus, containerd, buildah tools
 *   **Virtualization:** QEMU, libvirt, virt-manager, virt-viewer, virt-v2v, kcli
 *   **Profiling & Debugging:** bpftrace, bpftop, bcc, sysprof, trace-cmd, tiptop, iotop
-*   **Build Tools:** ccache, flatpak-builder, osbuild-selinux, umoci, podman-bootc
+*   **Build Tools:** ccache, flatpak-builder, osbuild-selinux, umoci, bcvk
 *   **Management Interfaces:** Cockpit suite (machines, podman, ostree, selinux, storage)
 *   **Utilities:** android-tools, usbmuxd, ydotool, p7zip, numactl
 
