@@ -69,11 +69,11 @@ if [[ "${ACTION_LOWER}" =~ (^enable[[:space:]]virtualization|virt-on) ]]; then
         rpm-ostree kargs \
             --append-if-missing="kvm.ignore_msrs=1" \
             --append-if-missing="kvm.report_ignored_msrs=0"
-        echo "Making sure swtpm will work"
-        if [[ ! -d "/var/lib/swtpm-localca" ]]; then
-            sudo mkdir /var/lib/swtpm-localca
-        fi
-        sudo chown tss /var/lib/swtpm-localca
+        # echo "Making sure swtpm will work"
+        # if [[ ! -d "/var/lib/swtpm-localca" ]]; then
+        #     sudo mkdir /var/lib/swtpm-localca
+        # fi
+        # sudo chown tss /var/lib/swtpm-localca
         sudo restorecon -rv /var/lib/libvirt
         sudo restorecon -rv /var/log/libvirt
         echo "Giving qemu access to read ISO files from $HOME"
