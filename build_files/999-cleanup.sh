@@ -22,11 +22,13 @@ dnf5 clean all
 # find /var/cache -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 # find /var/log -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
-find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
+# find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
+rm -rf /var
 # Clean temporary files
-rm -rf /tmp/*
+rm -rf /tmp/* || true
 # Ensure /var and /var/tmp exist
 mkdir -p /var/tmp
+chmod -R 1777 /var/tmp
 
 # Commit and lint container
 # This step is done in the Containerfile
