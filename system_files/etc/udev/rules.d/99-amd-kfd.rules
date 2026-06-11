@@ -1,0 +1,3 @@
+SUBSYSTEM=="kfd", GROUP="render", MODE="0666", OPTIONS+="last_rule"
+SUBSYSTEM=="drm", KERNEL=="card[0-9]*", GROUP="render", MODE="0666", OPTIONS+="last_rule"
+SUBSYSTEM=="drm", KERNEL=="renderD[0-9]*", GROUP="render", MODE="0666", OPTIONS+="last_rule"
