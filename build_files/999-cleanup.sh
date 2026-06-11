@@ -22,8 +22,13 @@ dnf5 clean all
 # find /var/cache -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 # find /var/log -mindepth 1 -maxdepth 1 -exec rm -rf {} +
 
-# find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
-rm -rf /var
+# !! This fails: `gh run view --log-failed --job=80899800832`
+# rm -rf /var
+#############
+# rm: cannot remove '/var/log': Device or resource busy
+# rm: cannot remove '/var/cache': Device or resource busy
+#############
+find /var/* -maxdepth 0 -type d \! -name cache -exec rm -fr {} \;
 # Clean temporary files
 rm -rf /tmp/* || true
 # Ensure /var and /var/tmp exist
