@@ -10,16 +10,17 @@ COPY build_files /build_files
 FROM ${BASE_IMAGE}
 
 ARG BASE_IMAGE
-ARG IMAGE_NAME="${IMAGE_NAME:-serpentine}"
-ARG IMAGE_VENDOR="${IMAGE_VENDOR:-bogdan-d}"
+ARG IMAGE_NAME="serpentine"
+ARG IMAGE_VENDOR="bogdan-d"
 
 ## Other possible base images include:
-# FROM ghcr.io/ublue-os/bazzite:latest
-# FROM ghcr.io/ublue-os/bluefin-nvidia:stable
+# FROM ghcr.io/ublue-os/bazzite:testing
+# FROM ghcr.io/ublue-os/aurora:stable
+# FROM ghcr.io/ublue-os/bluefin-nvidia-open:stable
 #
 # ... and so on, here are more base images
 # Universal Blue Images: https://github.com/orgs/ublue-os/packages
-# Fedora base image: quay.io/fedora/fedora-bootc:42
+# Fedora base image: quay.io/fedora/fedora-bootc:44
 # CentOS base images: quay.io/centos-bootc/centos-bootc:stream10
 
 ### [IM]MUTABLE /opt
