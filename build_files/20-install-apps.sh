@@ -71,6 +71,7 @@ INSTALL_FEDORA_PACKAGES=(
     gcc{,-c++}
     git-credential-libsecret
     git-subtree
+    google-noto-sans-fonts
     # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
     gvfs{,-fuse}
     icoutils
