@@ -5,6 +5,13 @@ FROM scratch AS ctx
 COPY system_files /files
 COPY build_files /build_files
 
+FROM ${BASE_IMAGE} AS plasma-patch-builder
+
+RUN --mount=type=bind,from=ctx,source=/,target=/run/context \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    /run/context/build_files/plasma-patches/build.sh
+
 # Base Image
 # FROM ghcr.io/ublue-os/bazzite:stable
 FROM ${BASE_IMAGE}
@@ -37,6 +44,11 @@ RUN rm /opt && mkdir /opt
 ### MODIFICATIONS
 ## make modifications desired in your image and install packages by modifying the build.sh script
 ## the following RUN directive does all the things required to run "build.sh" as recommended.
+
+RUN --mount=type=bind,from=plasma-patch-builder,source=/var/tmp/plasma-patch-rpms,target=/run/plasma-patch-rpms \
+    --mount=type=cache,dst=/var/cache \
+    --mount=type=cache,dst=/var/log \
+    dnf5 install -y /run/plasma-patch-rpms/*.rpm
 
 RUN --mount=type=bind,from=ctx,source=/,target=/run/context \
     --mount=type=cache,dst=/var/cache \

@@ -1,0 +1,35 @@
+--- kwin-6.7.3/src/dpmsinputeventfilter.cpp
++++ kwin-6.7.3/src/dpmsinputeventfilter.cpp.new
+@@ -28,6 +28,10 @@
+     KSharedConfig::Ptr kwinSettings = kwinApp()->config();
+     m_enableDoubleTap = kwinSettings->group(QStringLiteral("Wayland")).readEntry<bool>("DoubleTapWakeup", true);
+ 
++    KSharedConfig::Ptr lockerSettings = KSharedConfig::openConfig(QStringLiteral("kscreenlockerrc"));
++    m_lockscreenFirstKeyStrokeCarryOver = lockerSettings->group(QStringLiteral("Daemon"))
++                                              .readEntry<bool>("LockscreenFirstKeyStrokeCarryOver", true);
++
+     if (m_enableDoubleTap) {
+         m_sensor = std::make_unique<ProximitySensor>();
+         m_sensor->setEnabled(true);
+@@ -86,7 +90,11 @@
+     }
+ 
+     if (event->state == KeyboardKeyState::Pressed) {
++        const bool carryOver = m_lockscreenFirstKeyStrokeCarryOver && waylandServer()->isScreenLocked();
+         notify();
++        if (carryOver) {
++            return false;
++        }
+     } else if (event->state == KeyboardKeyState::Released) {
+         return false;
+     }
+--- kwin-6.7.3/src/dpmsinputeventfilter.h
++++ kwin-6.7.3/src/dpmsinputeventfilter.h.new
+@@ -57,6 +57,7 @@
+     bool m_secondTap = false;
+     bool m_enableDoubleTap = false;
+     bool m_proximityClose = false;
++    bool m_lockscreenFirstKeyStrokeCarryOver = true;
+ };
+ 
+ }

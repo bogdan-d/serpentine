@@ -1,0 +1,33 @@
+--- kscreenlocker-6.7.3/settings/kscreenlockersettings.kcfg
++++ kscreenlocker-6.7.3/settings/kscreenlockersettings.kcfg.new
+@@ -37,6 +37,10 @@
+       <default>false</default>
+       <label>Defines if the session is locked on startup</label>
+     </entry>
++    <entry key="LockscreenFirstKeyStrokeCarryOver" type="Bool">
++      <default>true</default>
++      <label>First keystroke on lockscreen is carried over to the password input</label>
++    </entry>
+   </group>
+   <group name="Greeter">
+     <entry key="Theme" type="String">
+--- kscreenlocker-6.7.3/kcm/ui/main.qml
++++ kscreenlocker-6.7.3/kcm/ui/main.qml.new
+@@ -109,6 +109,17 @@
+                 }
+             }
+ 
++            QQC2.CheckBox {
++                text: i18nc("@option:check", "Carry over first keystroke on lockscreen to password input")
++                checked: kcm.settings.lockscreenFirstKeyStrokeCarryOver
++                onToggled: kcm.settings.lockscreenFirstKeyStrokeCarryOver = checked
++
++                KCM.SettingStateBinding {
++                    configObject: kcm.settings
++                    settingName: "LockscreenFirstKeyStrokeCarryOver"
++                }
++            }
++
+             Item {
+                 Kirigami.FormData.isSection: true
+             }
