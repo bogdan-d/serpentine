@@ -2,7 +2,7 @@
 set -euo pipefail
 
 readonly CONTEXT_DIR=/run/context/build_files/plasma-patches
-readonly OUTPUT_DIR=/var/tmp/plasma-patch-rpms
+readonly OUTPUT_DIR=/plasma-patch-rpms
 readonly TOPDIR=/var/tmp/rpmbuild
 readonly SRPM_DIR=/var/tmp/plasma-patch-srpms
 
