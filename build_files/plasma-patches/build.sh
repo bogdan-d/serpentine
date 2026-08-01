@@ -16,7 +16,7 @@ for package in kscreenlocker kwin; do
     dnf5 download --source --destdir "${SRPM_DIR}" "${source_rpm%.src.rpm}"
 done
 
-dnf5 --setopt=exclude= --setopt='*.exclude=' builddep -y --srpm "${SRPM_DIR}"/*.src.rpm
+dnf5 --setopt='disable_excludes=*' builddep -y --srpm "${SRPM_DIR}"/*.src.rpm
 rpm -ivh --define "_topdir ${TOPDIR}" "${SRPM_DIR}"/*.src.rpm
 
 for package in kscreenlocker kwin; do
