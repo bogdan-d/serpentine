@@ -6,7 +6,11 @@ alias upgrade := update
 [group("system")]
 update:
     #!/usr/bin/bash
-    bazzite-updater --update
+    if command -v bazzite-updater >/dev/null 2>&1; then
+      bazzite-updater --update
+    else
+      /usr/bin/topgrade --config /usr/share/ublue-os/topgrade.toml --keep
+    fi
 
 # Update device firmware
 [group("system")]
