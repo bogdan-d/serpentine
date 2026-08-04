@@ -6,12 +6,7 @@ alias upgrade := update
 [group("system")]
 update:
     #!/usr/bin/bash
-
-    # Source brew if we are not in an interactive session
-    # ? Note: we should always have brew in PATH now
-    #[[ $- != *i* ]] && source <(/home/linuxbrew/.linuxbrew/bin/brew shellenv)
-
-    /usr/bin/topgrade --config /usr/share/ublue-os/topgrade.toml --keep
+    bazzite-updater --update
 
 # Update device firmware
 [group("system")]

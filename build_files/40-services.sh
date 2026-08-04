@@ -11,6 +11,16 @@ systemctl --global enable ublue-user-setup.service
 systemctl enable ublue-os-libvirt-workarounds.service
 systemctl enable serpentine-dx-groups.service
 
+# Restore UUPD update timer and Input Remapper
+sed -i 's@^NoDisplay=true@NoDisplay=false@' /usr/share/applications/input-remapper-gtk.desktop
+systemctl enable input-remapper.service
+systemctl enable uupd.timer
+
+# Restore tuned
+systemctl mask powerstation.service
+systemctl enable tuned.service
+systemctl enable tuned-ppd.service
+
 #################################################
 ### Current contents of /etc/sysconfig/firewalld
 #################################################
