@@ -177,6 +177,7 @@ INSTALL_VIRT_PACKAGES=(
 
 # Install the package group in one go
 echo "Installing ${#INSTALL_FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
+dnf5 clean all
 dnf5 install -y "${INSTALL_FEDORA_PACKAGES[@]}"
 
 # Install AMD GPU related packages if not nvidia image
