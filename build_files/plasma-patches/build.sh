@@ -14,6 +14,12 @@ dnf5 install -y rpm-build
 for package in kscreenlocker kwin; do
     source_rpm=$(rpm -q --qf '%{SOURCERPM}' "${package}")
     dnf5 download --source --destdir "${SRPM_DIR}" "${source_rpm%.src.rpm}"
+    if [[ ! -f "${SRPM_DIR}/${source_rpm}" ]]; then
+        version=$(rpm -q --qf '%{VERSION}' "${package}")
+        release=$(rpm -q --qf '%{RELEASE}' "${package}")
+        curl --fail --location --retry 3 --output "${SRPM_DIR}/${source_rpm}" \
+            "https://kojipkgs.fedoraproject.org/packages/${package}/${version}/${release}/src/${source_rpm}"
+    fi
 done
 
 dnf5 --setopt='disable_excludes=*' builddep -y --srpm "${SRPM_DIR}"/*.src.rpm
