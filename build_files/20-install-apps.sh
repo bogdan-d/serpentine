@@ -76,6 +76,8 @@ INSTALL_FEDORA_PACKAGES=(
     google-noto-sans-cham-fonts
     google-noto-sans-cjk-fonts
     google-noto-sans-javanese-fonts
+    google-noto-sans-linear-a-fonts
+    google-noto-sans-linear-b-fonts
     google-noto-sans-sundanese-fonts
     # gvfs related: https://gitlab.gnome.org/World/deja-dup/-/issues/630
     gvfs{,-fuse}
@@ -85,6 +87,7 @@ INSTALL_FEDORA_PACKAGES=(
     iotop
     iwd
     input-remapper
+    intel-vaapi-driver
     just
     kcm-fcitx5
     krb5-workstation
