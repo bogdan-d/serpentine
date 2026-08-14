@@ -8,8 +8,10 @@ update:
     #!/usr/bin/bash
     if command -v bazzite-updater >/dev/null 2>&1; then
       bazzite-updater --update
+    elif command -v topgrade >/dev/null 2>&1; then
+      topgrade --config /usr/share/ublue-os/topgrade.toml --keep
     else
-      /usr/bin/topgrade --config /usr/share/ublue-os/topgrade.toml --keep
+      sudo uupd --hw-check=false --json --log-level=debug | jq -r '[(.title, .msg, .description) | select(.)] | join(" ")'
     fi
 
 # Update device firmware
