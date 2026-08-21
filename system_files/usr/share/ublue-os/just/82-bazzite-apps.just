@@ -330,10 +330,10 @@ asus ACTION="":
             while true; do
                 read -r -p "Proceed to remove these layers first? {{ YELLOW }}(Y/n){{ NORMAL }} " REPLY || exit 1
                 if [[ ! $REPLY || $REPLY == "Y" || $REPLY == "y" ]]; then
+                    systemctl --user disable --now asusd-user.service
                     sudo systemctl disable --now asusd.service asus-shutdown.service
                     sudo udevadm control --reload
                     sudo udevadm trigger
-                    systemctl --user disable --now asusd-user.service
                     rpm-ostree uninstall -y "${layered_packages[*]}"
                     echo 'Complete, please reboot to apply changes.'
                     exit 0
@@ -385,18 +385,18 @@ asus ACTION="":
         done
 
         if [ ${#brew_packages[@]} -gt 0 ]; then
+            systemctl --user disable --now asusd-user.service
             sudo systemctl disable --now asusd.service asus-shutdown.service
             sudo udevadm control --reload
             sudo udevadm trigger
-            systemctl --user disable --now asusd-user.service
             echo "Uninstalling: ${brew_packages[*]}"
             brew remove "${brew_packages[@]}"
             echo 'Complete.'
         elif [ ${#layered_packages[@]} -gt 0 ]; then
+            systemctl --user disable --now asusd-user.service
             sudo systemctl disable --now asusd.service asus-shutdown.service
             sudo udevadm control --reload
             sudo udevadm trigger
-            systemctl --user disable --now asusd-user.service
             echo "Uninstalling: ${layered_packages[*]}"
             rpm-ostree uninstall -y "${layered_packages[*]}"
             echo 'Complete, please reboot to apply changes.'
@@ -979,7 +979,7 @@ opentabletdriver ACTION="":
         mkdir -p $HOME/.config/OpenTabletDriver && \
         flatpak override --user --filesystem=xdg-config/OpenTabletDriver net.opentabletdriver.OpenTabletDriver && \
         mkdir -p $HOME/.config/systemd/user && \
-        curl -s https://raw.githubusercontent.com/flathub/net.opentabletdriver.OpenTabletDriver/refs/heads/master/scripts/opentabletdriver.service > $HOME/.config/systemd/user/opentabletdriver.service  && \
+        curl -s https://raw.githubusercontent.com/flathub/net.opentabletdriver.OpenTabletDriver/48e27fe5fc2a26d3918880d292bb96dc66edf50b/scripts/opentabletdriver.service > $HOME/.config/systemd/user/opentabletdriver.service  && \
         systemctl --user daemon-reload && \
         systemctl enable --user --now opentabletdriver.service && \
         rpm-ostree kargs --append-if-missing=modprobe.blacklist=hid_uclogic --append-if-missing=modprobe.blacklist=wacom
