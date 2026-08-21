@@ -115,26 +115,26 @@ If you want to customize this image or build it yourself, you can use the provid
     cd serpentine
     ```
 
-2.  **Build the container image:**
+2.  **Build, rechunk, and verify the container image:**
     ```bash
-    just build bazzite kinoite
+    just build-verified
     ```
 
-    For NVIDIA variant:
+    To build without rechunking:
     ```bash
-    just build bazzite-nvidia kinoite
+    just build
     ```
 
 3.  **(Optional) Build a bootable ISO:**
     You can create an ISO for installation.
     ```bash
-    just build-iso bazzite kinoite
+    just build-iso
     ```
-    The generated images will be in the root directory.
+    The generated images will be in `output/`.
 
-4.  **Test the image:**
+4.  **Verify an existing image:**
     ```bash
-    just run bazzite kinoite
+    just verify
     ```
 
 ### Build System Overview

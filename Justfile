@@ -72,48 +72,99 @@ sudoif command *args:
     }
     sudoif {{ command }} {{ args }}
 
-# This Justfile recipe builds a container image using Podman.
-#
-# Arguments:
-#   $target_image - The tag you want to apply to the image (default: $image_name).
-#   $tag - The tag for the image (default: $default_tag).
-#   $base_image - The base image to build from (default: bazzite).
-#
-# The script constructs the version string using the tag and the current date.
-# If the git working directory is clean, it also includes the short SHA of the current HEAD.
-#
-# just build $target_image $tag $base_image
-#
-# Example usage:
-#   just build serpentine latest bazzite-nvidia
-#
-# This will build an image 'serpentine:latest' based on bazzite-nvidia.
-#
-
-# Build the image using the specified parameters
+# Build the raw image with the same Buildah path used in CI
 [group('Build')]
 build $target_image=image_name $tag=default_tag $base_image=source_image:
     #!/usr/bin/env bash
+    set -euo pipefail
 
-    # Get Version
-    ver="${tag}-$(date +%Y%m%d)"
-
-    # Construct full base image reference
     BASE_IMAGE_REF="ghcr.io/${source_org}/${base_image}:${source_tag}"
 
-    BUILD_ARGS=()
-    BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE_REF}")
-    BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${image_name}")
-    BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${repo_organization}")
-    if [[ -z "$(git status -s)" ]]; then
-        BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
-    fi
-
-    podman build \
-        "${BUILD_ARGS[@]}" \
+    buildah build \
         --pull=newer \
+        --file Containerfile \
+        --build-arg "BASE_IMAGE=${BASE_IMAGE_REF}" \
+        --build-arg "IMAGE_NAME=${image_name}" \
+        --build-arg "IMAGE_VENDOR=${repo_organization}" \
         --tag "${target_image}:${tag}" \
         .
+
+# Rechunk an image with the same rpm-ostree path used in CI
+[group('Build')]
+rechunk $target_image=image_name $tag=default_tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    image="${target_image}:${tag}"
+    rechunk_dir="$(mktemp -d /var/tmp/serpentine-rechunk-XXXXXX)"
+    labels_file="$(mktemp /var/tmp/serpentine-labels-XXXXXX)"
+    trap 'rm -rf "${rechunk_dir}" "${labels_file}"' EXIT
+
+    export IMAGE="${image}"
+    buildah unshare bash -euo pipefail -c '
+        container=$(buildah from "$IMAGE")
+        mnt=$(buildah mount "$container")
+        rm -rf "$mnt"/run/.* "$mnt"/run/* "$mnt"/tmp/.* "$mnt"/tmp/* || true
+        buildah umount "$container"
+        buildah commit --identity-label=false --rm "$container" "$IMAGE"
+    '
+
+    kernel_version=$(podman run --rm "${image}" \
+        rpm -q --qf '%{VERSION}-%{RELEASE}.%{ARCH}\n' kernel-core)
+
+    podman inspect "${image}" | jq -r --arg kernel "${kernel_version}" '
+        (.[0].Config.Labels // {}) + {
+            "containers.bootc": "1",
+            "ostree.bootable": "true",
+            "ostree.linux": $kernel
+        }
+        | to_entries[]
+        | "\(.key)=\(.value)"
+    ' > "${labels_file}"
+
+    label_args=()
+    while IFS= read -r label; do
+        [[ -n "${label}" ]] && label_args+=(--label "${label}")
+    done < "${labels_file}"
+
+    podman run --rm \
+        --pull=never \
+        --privileged \
+        --mount="type=image,src=${image},target=/rpm-ostree" \
+        --volume "${rechunk_dir}:/run/out:Z" \
+        --entrypoint /usr/bin/rpm-ostree \
+        "${image}" \
+        compose build-chunked-oci \
+        --bootc --max-layers 127 --format-version 2 \
+        "${label_args[@]}" \
+        --rootfs /rpm-ostree \
+        --output oci-archive:/run/out/chunked.oci
+
+    chunked=$(podman pull "oci-archive:${rechunk_dir}/chunked.oci")
+    podman tag "${chunked}" "${image}"
+
+# Verify the final image's RPM database and expected package ownership
+[group('Build')]
+verify $target_image=image_name $tag=default_tag:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    podman run --rm "${target_image}:${tag}" bash -euo pipefail -c '
+        rpm --verifydb
+        rpm -q \
+            cockpit-machines \
+            containerd.io \
+            kcli \
+            rocm-clinfo \
+            virt-install
+    '
+
+# Build, rechunk, and verify the final image
+[group('Build')]
+build-verified $target_image=image_name $tag=default_tag $base_image=source_image:
+    just build "${target_image}" "${tag}" "${base_image}"
+    just rechunk "${target_image}" "${tag}"
+    just verify "${target_image}" "${tag}"
 
 # Command: _rootful_load_image
 # Description: This script checks if the current user is root or running under sudo. If not, it attempts to resolve the image tag using podman inspect.

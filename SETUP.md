@@ -168,7 +168,7 @@ This template comes with the necessary tooling to index your image on [artifacth
 
 # Justfile Documentation
 
-The `Justfile` contains various commands and configurations for building and managing container images and virtual machine images using Podman and other utilities.
+The `Justfile` contains commands for building with Buildah, rechunking and testing with Podman, and producing virtual machine images.
 To use it, you must have installed [just](https://just.systems/man/en/introduction.html) from your package manager or manually. It is available by default on all Universal Blue images.
 
 ## Environment Variables
@@ -181,7 +181,7 @@ To use it, you must have installed [just](https://just.systems/man/en/introducti
 
 ### `just build`
 
-Builds a container image using Podman.
+Builds the raw container image using Buildah.
 
 ```bash
 just build $target_image $tag
@@ -190,6 +190,16 @@ just build $target_image $tag
 Arguments:
 - `$target_image`: The tag you want to apply to the image (default: `$image_name`).
 - `$tag`: The tag for the image (default: `$default_tag`).
+
+### `just build-verified`
+
+Builds, rechunks, and verifies the final image using the same tools as CI.
+
+```bash
+just build-verified $target_image $tag
+```
+
+Use `just rechunk` or `just verify` to run either check against an existing image.
 
 ## Building and Running Virtual Machines and ISOs
 

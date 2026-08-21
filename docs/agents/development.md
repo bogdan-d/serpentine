@@ -5,7 +5,9 @@
 - `just --list` — list available recipes
 - `just check` — validate Just syntax
 - `just lint` — run shellcheck over `*.sh`
-- `just build` — build the container image
+- `just build` — build the raw container image with Buildah
+- `just build-verified` — build, rechunk, and verify as CI does
+- `just rechunk` / `just verify` — process or check an existing image
 - `just build-iso` / `just build-qcow2` — produce VM artifacts
 
 ## Debugging
