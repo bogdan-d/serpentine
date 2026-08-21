@@ -201,6 +201,10 @@ From previous \`{target}\` version \`{prev}\` there have been the following chan
 | **Podman** | {pkgrel:podman} |
 | **Docker** | {pkgrel:docker} |
 | **ROCm** | {pkgrel:rocm-runtime} |
+| **Bootc** | {pkgrel:bootc} |
+| **Flatpak** | {pkgrel:flatpak} |
+| **OSTree** | {pkgrel:ostree} |
+| **RPM-OSTree** | {pkgrel:rpm-ostree} |
 ${NVIDIA_ROW}
 
 {changes}
@@ -234,6 +238,10 @@ const BLACKLIST_VERSIONS = [
   "nvidia-driver",
   "rocm-runtime",
   "bazaar",
+  "bootc",
+  "flatpak",
+  "ostree",
+  "rpm-ostree",
 ];
 
 const MAJOR_PACKAGE_KEYS: Record<string, string[]> = {
@@ -246,6 +254,10 @@ const MAJOR_PACKAGE_KEYS: Record<string, string[]> = {
   "podman": ["podman"],
   "docker": ["docker-ce", "docker"],
   "rocm-runtime": ["rocm-runtime"],
+  "bootc": ["bootc"],
+  "flatpak": ["flatpak"],
+  "ostree": ["ostree"],
+  "rpm-ostree": ["rpm-ostree"],
 };
 
 // ============================================================================
