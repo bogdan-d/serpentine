@@ -7,7 +7,7 @@ alias upgrade := update
 update:
     #!/usr/bin/bash
     if command -v bazzite-updater >/dev/null 2>&1; then
-      bazzite-updater --update
+      bazzite-updater --update | jq -r -R 'fromjson? | [(.title, .msg, .description) | select(.)] | join(" ")'
     elif command -v topgrade >/dev/null 2>&1; then
       topgrade --config /usr/share/ublue-os/topgrade.toml --keep
     else
