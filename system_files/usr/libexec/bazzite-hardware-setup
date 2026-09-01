@@ -20,7 +20,7 @@ KNOWN_IMAGE_BRANCH=$(cat $KNOWN_IMAGE_BRANCH_FILE)
 KNOWN_FEDORA_VERSION_FILE="/etc/bazzite/fedora_version"
 KNOWN_FEDORA_VERSION=$(cat $KNOWN_FEDORA_VERSION_FILE)
 
-# Take care of autologin for non -deck or -dx images where this file is not needed.
+# Take care of autologin for non-deck or -dx images where this file is not needed.
 if [[ "$IMAGE_NAME" != *deck* && "$IMAGE_NAME" != *dx* ]]; then
   rm -f /etc/sddm.conf.d/steamos.conf
 fi
@@ -244,11 +244,6 @@ fi
 # Let's check the length and reset it to something sensible if that happens.
 if (( $(hostname | wc -m) > 20 )); then
   hostnamectl set-hostname serpentine
-fi
-
-# Set default target to graphical, fixes rebase from base image
-if grep -qv "graphical.target" <<< "$(systemctl get-default)"; then
-  systemctl set-default graphical.target
 fi
 
 # Fix missing hostname file breaking distrobox
