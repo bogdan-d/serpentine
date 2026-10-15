@@ -22,7 +22,8 @@ for package in kscreenlocker kwin; do
     fi
 done
 
-dnf5 --setopt='disable_excludes=*' builddep -y --srpm "${SRPM_DIR}"/*.src.rpm
+# Bazzite's Terra Xwayland needs its matching devel package from the disabled extras repo.
+dnf5 --enable-repo=terra-extras --setopt='disable_excludes=*' builddep -y --srpm "${SRPM_DIR}"/*.src.rpm
 rpm -ivh --define "_topdir ${TOPDIR}" "${SRPM_DIR}"/*.src.rpm
 
 for package in kscreenlocker kwin; do
