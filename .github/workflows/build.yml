@@ -2,7 +2,7 @@
 name: Build Serpentine
 on:
   schedule:
-    - cron: '05 05 */2 * *'  # 05:05am UTC every 2 days
+    - cron: '05 05 1,15 * *'  # 05:05am UTC on the 1st and 15th (~every 2 weeks)
   pull_request:
     branches:
       - main
